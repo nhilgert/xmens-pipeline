@@ -1,0 +1,22 @@
+cluster,label,n_cells,res,note
+0,endothelial_blood,124,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+1,endothelial_blood,94,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+2,EXCLUDE,53,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
+3,EXCLUDE,110,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
+4,EXCLUDE,76,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
+5,EXCLUDE,105,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
+6,endothelial_lymph,85,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
+7,endothelial_lymph,125,leiden_scVI_3.0,"LEC: PROX1 0.90 RELN 0.98. NB doublet score ~9.15 -- KEPT anyway. LECs are large and RNA-rich so the continuous score is inflated; exclusion is marker-based (handoff §5), same as mouse cluster 19."
+8,endothelial_lymph,74,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
+9,endothelial_blood,70,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+10,endothelial_blood,80,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+11,endothelial_blood,44,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+12,endothelial_lymph,58,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
+13,EXCLUDE,91,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
+14,endothelial_blood,79,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+15,endothelial_lymph,62,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
+16,endothelial_lymph,102,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
+17,endothelial_blood,111,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+18,endothelial_blood,122,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+19,endothelial_blood,104,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
+20,EXCLUDE,44,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination

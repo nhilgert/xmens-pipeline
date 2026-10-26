@@ -1,0 +1,16 @@
+sample_id	species	timepoint	modality	coords_id	path
+uninduced_mck8a	mouse	uninduced	slidetags	mck_8a	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/uninduced_mck8a.h5
+uninduced_mck8b	mouse	uninduced	slidetags	mck_8b	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/uninduced_mck8b.h5
+1_dpi_early_mck1	mouse	1_dpi_early	slidetags	mck_1	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/1_dpi_early_mck1.h5
+1_dpi_late_mck12a	mouse	1_dpi_late	slidetags	mck_12a	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/1_dpi_late_mck12a.h5
+1_dpi_late_mck12b	mouse	1_dpi_late	slidetags	mck_12b	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/1_dpi_late_mck12b.h5
+2_dpi_mck15	mouse	2_dpi	slidetags	mck_15	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/2_dpi_mck15.h5
+3_dpi_mck10a	mouse	3_dpi	slidetags	mck_10a	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/3_dpi_mck10a.h5
+3_dpi_mck10b	mouse	3_dpi	slidetags	mck_10b	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/3_dpi_mck10b.h5
+4_dpi_bleeding_mck11a	mouse	4_dpi_bleeding	slidetags	mck_11a	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/4_dpi_bleeding_mck11a.h5
+secretory_mck6a	human	secretory	slidetags	mck_6a	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/secretory_mck6a.h5
+secretory_mck6b	human	secretory	slidetags	mck_6b	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/secretory_mck6b.h5
+secretory_mck6c	human	secretory	slidetags	mck_6c	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/secretory_mck6c.h5
+menstrual_mck5a	human	menstrual	slidetags	mck_5a	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/menstrual_mck5a.h5
+menstrual_mck5b	human	menstrual	slidetags	mck_5b	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/menstrual_mck5b.h5
+menstrual_mck5c	human	menstrual	slidetags	mck_5c	/n/lab_storage/eddy_lab/users/nhilgert/decidualization/xmens_inputs/menstrual_mck5c.h5

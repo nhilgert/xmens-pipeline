@@ -1,0 +1,95 @@
+# profiles/slurm/config.yaml
+# SLURM execution profile for FASRC (eddy partition). Run with:
+#   snakemake --profile profiles/slurm --use-conda --conda-frontend conda <targets>
+#
+# This is the ONE place cluster specifics live. Rules stay cluster-agnostic;
+# this file maps each rule's resource needs onto how eddy grants them. To port
+# to another cluster, edit this file only (partition names, exclude list, paths).
+
+executor: slurm
+jobs: 20                          # max concurrent submitted jobs
+use-conda: false                   # rules with a conda: directive get their env
+conda-frontend: conda
+rerun-incomplete: true
+printshellcmds: true
+
+# ---- default resources (every rule unless overridden in set-resources) ----
+# eddy is a shared CPU+GPU partition. For CPU jobs we EXCLUDE the GPU nodes so
+# CPU work doesn't occupy a GPU node (mirrors your sbatch --exclude list).
+default-resources:
+  slurm_partition: "eddy"
+  runtime: 120                    # minutes
+  mem_mb: 16000
+  cpus_per_task: 4
+  slurm_extra: "--exclude=holygpu7c0522,holygpu7c0530,holygpu7c0920,holygpu8a26504,holygpu8a26505,holygpu8a26506"
+
+# ---- per-rule overrides ---------------------------------------------------
+set-resources:
+  # QC runs DoubletDetection (40 iters); human samples (~17k cells) are slow.
+  qc:
+    runtime: 240
+    mem_mb: 32000
+    cpus_per_task: 8
+  # scVI integration wants a GPU -> route to a GPU node (NO exclude list here).
+  integrate:
+    runtime: 240
+    mem_mb: 48000
+    cpus_per_task: 8
+    gres: "gpu:1"
+    slurm_extra: ""
+  reembed:
+    runtime: 240
+    mem_mb: 48000
+    cpus_per_task: 8
+    gres: "gpu:1"
+    slurm_extra: ""
+  # Annotation migration: staging-only whole-atlas re-embedding.
+  reembed_migrated:
+    runtime: 240
+    mem_mb: 64000
+    cpus_per_task: 8
+    gres: "gpu:1"
+    slurm_extra: ""
+  # Daytime scratch-only per-timepoint scVI pseudotime tests.
+  compute_pseudotime:
+    runtime: 240
+    mem_mb: 48000
+    cpus_per_task: 8
+    gres: "gpu:1"
+    slurm_extra: ""
+  diagnose_3dpi_pseudotime_roots:
+    runtime: 240
+    mem_mb: 48000
+    cpus_per_task: 8
+    gres: "gpu:1"
+    slurm_extra: ""
+  reintegrate_lineage:
+    runtime: 240
+    mem_mb: 48000
+    cpus_per_task: 8
+    gres: "gpu:1"
+    slurm_extra: ""
+  # heavier CPU stages
+  cellrank:
+    mem_mb: 64000
+    runtime: 240
+  scenic:
+    cpus_per_task: 16
+    runtime: 480
+    mem_mb: 64000
+  samap:
+    cpus_per_task: 8
+    runtime: 240
+    mem_mb: 48000
+
+  # CellBender (00_cellbender) -- GPU, A40 specifically (like the original script)
+  cellbender:
+    runtime: 480
+    mem_mb: 64000
+    cpus_per_task: 1
+    gres: "gpu:nvidia_a40:1"
+    slurm_extra: ""
+
+# conda isn't on PATH (uv shop), so hashing conda envs fails and makes every rule
+# look stale -- drop software-env from the rerun triggers
+rerun-triggers: [code, mtime, params, input]

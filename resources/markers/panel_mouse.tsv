@@ -1,0 +1,23 @@
+# Mouse coarse cell-type marker panel.
+# Source: Cevrim et al. 2025 (bioRxiv 2025.10.08.681007), Figure 1c dotplot.
+#
+# role          lineage = used for scoring/assignment; context = plotted only,
+#                 never used to assign (hormone receptors are expressed across
+#                 several lineages and discriminate nothing).
+# nested_within a cell type that is a differentiated state of another and
+#                 therefore ALSO expresses the parent's markers. Decidual cells
+#                 are differentiated endometrial fibroblasts, so they score high
+#                 on both sets; argmax alone would mislabel them. See the
+#                 nesting override in the notebook.
+# genes         comma-separated, no spaces.
+#
+# Row order sets the dotplot row order (matches the published figure).
+celltype	role	nested_within	genes
+epithelial cells	lineage		Cdh1,Pax8
+endometrial fibroblasts	lineage		Pdgfra
+decidual cells	lineage	endometrial fibroblasts	Wnt4,Prl8a2,Bmp2,Cdh3
+vascular cells	lineage		Flt1,Pecam1
+immune cells	lineage		Ptprc
+smooth muscle cells	lineage		Acta2,Myh11
+perimetrium cells	lineage		Sox6
+hormone receptors	context		Pgr,Esr1

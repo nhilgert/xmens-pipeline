@@ -1,0 +1,8 @@
+[project]
+name = "xmens-base-env"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = ["snakemake>=8","snakemake-executor-plugin-slurm","pandas",
+                "scanpy","anndata","scvi-tools==1.1.2","networkx","pybiomart","xmens"]
+[tool.uv.sources]
+xmens = { path = "../..", editable = true }

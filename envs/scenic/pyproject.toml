@@ -1,0 +1,9 @@
+# scenic env — pin exact versions before publishing (uv lock).
+[project]
+name = "xmens-scenic-env"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = ["pyscenic", "scanpy", "anndata", "xmens"]
+
+[tool.uv.sources]
+xmens = { path = "../..", editable = true }

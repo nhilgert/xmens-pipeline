@@ -1,0 +1,23 @@
+# Human coarse cell-type marker panel.
+# Source: Cevrim et al. 2025 (bioRxiv 2025.10.08.681007), human dotplot figure.
+#
+# NOTE: this is NOT a gene-for-gene translation of panel_mouse.tsv. The published
+# human panel uses different markers (EPCAM/KLF5 for epithelium, the COL5A1/
+# COL6A3/DCN block for fibroblasts, LEFTY2/IGFBP1 for decidual). Do not assume a
+# shared marker list across species -- the mouse decidual marker Prl8a2 has no
+# human ortholog (rodent-expanded placental prolactin family; human decidual
+# prolactin is simply PRL, which the published human panel does not use).
+#
+# role          lineage = used for scoring/assignment; context = plotted only.
+# nested_within see panel_mouse.tsv.
+# genes         comma-separated, no spaces.
+#
+# Row order sets the dotplot row order (matches the published figure).
+celltype	role	nested_within	genes
+epithelial cells	lineage		EPCAM,KLF5
+endometrial fibroblasts	lineage		COL5A1,COL6A3,DCN
+decidual cells	lineage	endometrial fibroblasts	LEFTY2,IGFBP1
+smooth muscle cells	lineage		ACTA2,MYH11
+immune cells	lineage		PTPRC,STK17B
+perivascular cells	lineage		PECAM1,VWF
+hormone receptors	context		PGR,ESR1

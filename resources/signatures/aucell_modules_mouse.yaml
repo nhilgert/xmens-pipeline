@@ -1,0 +1,245 @@
+# AUCell decidual-zone module gene sets -- MOUSE gene symbols.
+# Source: Li R, Wang T, Xu X, Emery OM, Yi M, Wu S-P, DeMayo FJ (2022). Spatial transcriptomic profiles of mouse
+# uterine microenvironments at pregnancy day 7.5. Biol Reprod 107(2):529-545, doi:10.1093/biolre/ioac061.
+# Table 1 (p. 533): top 20 marker genes per microenvironment, ranked by fold change; all 20 kept, in the table's order.
+# 2026-10-24: made verbatim. The 2026-08-28 version (from 2026_08_21_clean_objs.ipynb cell 8; git b9fa19c, md5
+# f2e3eaa0c26ad93a320ff28856486717) left out 4 of them: MMy Hba-a2 (rank 13) and Hbb-bs (18); PDZ Ntn5 (19);
+# TDZ Prl8a2 (6). Transcribed from the PDF text layer; the only repair was 'A W112010' -> 'AW112010'.
+# Read by workflow/rules/16_zone_modules.smk (rule zone_aucell -> workflow/scripts/zone_modules/score_zone_aucell.py).
+# Mouse objects only (mouse symbols). 2610528A11Rik (FMI) is not in the mouse annotation: FMI scores 19 of 20 genes.
+# MD (mesometrial decidua): top markers are uterine NK-cell genes (Gzm*, Prf1, Il2rb); Li et al. describe these NK
+# cells as non-cytotoxic. FMI (fetal-maternal interface; markers Mrgprg, Bco1, Tmem45a) is endothelial-rich in their
+# deconvolution, which maps myeloid cells to C, not FMI.
+# PDZ/TDZ/SDZ = primary/transitional/secondary decidual zones (inner -> outer).
+
+MMy:
+  - Actg2
+  - Acta2
+  - Myl9
+  - Myh11
+  - Tpm2
+  - Pcp4
+  - Col3a1
+  - Tagln
+  - Cnn1
+  - Postn
+  - Mylk
+  - Col6a3
+  - Hba-a2
+  - Acta1
+  - Ifi27l2a
+  - Fn1
+  - Lum
+  - Hbb-bs
+  - Col1a2
+  - Tpm1
+MD:
+  - Gzmf
+  - Spp1
+  - Gzmd
+  - Gzme
+  - Gzmg
+  - Gzmc
+  - Gzma
+  - Prf1
+  - Gzmb
+  - Fcer1g
+  - Ifitm1
+  - AW112010
+  - Tyrobp
+  - Il2rb
+  - Cd52
+  - Tmsb15a
+  - Chn1
+  - Rac2
+  - Ptn
+  - Trbc1
+VSZ:
+  - Stmn2
+  - Hmgn5
+  - Fmo1
+  - Wnt6
+  - Rcn1
+  - Hmgcs2
+  - Tdo2
+  - Sned1
+  - Ntrk1
+  - Ear2
+  - Tac2
+  - Susd2
+  - Anxa5
+  - Fbn1
+  - Srgn
+  - Ptn
+  - Cxcl14
+  - Efemp1
+  - Tmem176a
+  - Syt13
+FMI:
+  - S100a8
+  - Srd5a1
+  - Tfpi
+  - Mrgprg
+  - Bco1
+  - 2610528A11Rik
+  - Angpt2
+  - Tmem45a
+  - Il1r2
+  - Csf1r
+  - Timp3
+  - 4930486L24Rik
+  - Lmcd1
+  - Masp1
+  - Lgals3
+  - Slc6a12
+  - Ramp3
+  - Ctsk
+  - Cryaa
+  - Txn1
+C:
+  - H19
+  - Prl3d1
+  - Ceacam15
+  - Prl4a1
+  - Ceacam9
+  - Plet1
+  - Prl7a1
+  - Pfpl
+  - Cts7
+  - Mmp9
+  - Adm
+  - Psg29
+  - Krt8
+  - Plac1
+  - Prl8a9
+  - Efna1
+  - Jaml
+  - Krt18
+  - Apoc2
+  - Prl2a1
+PDZ:
+  - Prl3c1
+  - Htra1
+  - Fabp4
+  - Prl8a2
+  - Tnnc1
+  - Gm2694
+  - Dbi
+  - Gm2a
+  - Psap
+  - Cryab
+  - Erv3
+  - Ctla2b
+  - Crct1
+  - Adamts5
+  - Acsbg1
+  - Krtdap
+  - Smpd1
+  - Gng11
+  - Ntn5
+  - Hopx
+TDZ:
+  - Psca
+  - Sprr2h
+  - Gpnmb
+  - Erv3
+  - Krtdap
+  - Prl8a2
+  - Fabp4
+  - Olr1
+  - Psap
+  - Akr1b3
+  - Prdx6
+  - Rgcc
+  - Acsbg1
+  - Hsd11b1
+  - Dbi
+  - Hopx
+  - Cyb5a
+  - Lipg
+  - Ehd3
+  - Dnaja4
+SDZ:
+  - Mt3
+  - Mt4
+  - Gatm
+  - Mgp
+  - Coch
+  - Dio3
+  - Sfrp5
+  - Pdzk1ip1
+  - Dmkn
+  - Mt2
+  - Atoh8
+  - Anxa8
+  - Mt1
+  - Nampt
+  - Prrx2
+  - Tdo2
+  - Drd4
+  - A2m
+  - Prkg2
+  - Ass1
+udStr:
+  - Sfrp4
+  - Rbp4
+  - Igfbp5
+  - Igfbp3
+  - Penk
+  - Spink8
+  - Prxl2a
+  - C3
+  - Mt4
+  - Ctla2a
+  - Mfap4
+  - Bgn
+  - Itm2a
+  - Col1a2
+  - Igf1
+  - Rnase4
+  - Col1a1
+  - Hsd11b2
+  - Serpine2
+  - Pcolce
+Glan:
+  - Prss29
+  - Spink1
+  - Prss28
+  - Prap1
+  - Clu
+  - Fxyd3
+  - Lcn2
+  - Wfdc2
+  - S100g
+  - Tmem213
+  - Prom1
+  - Mmp7
+  - Aqp8
+  - Rbp4
+  - Cldn10
+  - Hp
+  - Ier3
+  - Sfrp4
+  - Klk1
+  - Agr2
+AMMy:
+  - Cnn1
+  - Tagln
+  - Myl9
+  - Myh11
+  - Prss29
+  - Smtn
+  - Igfbp6
+  - Acta2
+  - Prss28
+  - Csrp1
+  - Pcp4
+  - Tpm2
+  - Igfbp2
+  - Apoe
+  - Flna
+  - Ltbp4
+  - Actg2
+  - Nppa
+  - Sparcl1
+  - Spink1

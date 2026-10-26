@@ -1,0 +1,19 @@
+# data and run artifacts are never committed
+data/
+results/
+logs/
+.snakemake/
+*.h5ad
+*.qs
+*.loom
+
+# environments and caches
+.venv*/
+**/.venv*/
+__pycache__/
+*.egg-info/
+**/.ipynb_checkpoints/
+
+# editor and OS files
+*.bak
+.DS_Store
