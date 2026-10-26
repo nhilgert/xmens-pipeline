@@ -20,7 +20,6 @@ config/config.yaml          samples, references, parameters, cluster paths
 resources/annotations/      cluster -> label tables (the annotation record)
 resources/lineage_spec.yaml resolution, markers and label provenance per cell class
 resources/annotation_vocabulary.yaml   allowed labels, display names, expected counts
-notebooks/public/           one notebook per cell class showing the marker evidence
 profiles/slurm/             SLURM executor settings
 envs/                       conda environments for SCENIC, SAMap, DoubletDetection
 ```
@@ -35,7 +34,7 @@ envs/                       conda environments for SCENIC, SAMap, DoubletDetecti
 | 04b–04d | `04b`–`04d` | Per-class scVI re-integration, subtypes from committed tables at resolution 3.0, merge |
 | 04e–04g | `04e`–`04g` | Final embedding, spatial-coordinate QC, promotion to a dated release with sha256 manifest |
 | 05–24 | `05`–`24` | Marker DE, time-informed diffusion pseudotime (moscot + CellRank), pseudotime genes (mutual information), SAMap alignment and transfer, SCENIC regulons, decidual-zone scores, in vitro comparison, figures |
-| 98–99 | `98`, `99` | Off the critical path: clustering-stability tables, executed annotation notebooks |
+| 98 | `98_clustree` | Off the critical path: clustering-stability tables |
 
 The spine (00–04g) produces one frozen release per species; every analysis arm
 reads only that release.
@@ -45,8 +44,8 @@ reads only that release.
 No label is computed inside the pipeline. Each annotation step looks up a committed
 table in `resources/annotations/` (one row per Leiden cluster: cluster, label,
 cell count, resolution, curator note) with `workflow/scripts/atlas/apply_annotation.py`.
-The tables came from marker review of deliberately over-clustered data; the
-notebooks in `notebooks/public/` reproduce the marker evidence for each class.
+The tables came from marker review of deliberately over-clustered data, with the
+marker panels recorded in `resources/lineage_spec.yaml`.
 
 ## Running
 
