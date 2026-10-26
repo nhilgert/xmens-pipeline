@@ -6,11 +6,10 @@ counts in layers[params.counts_layer] and writes data/interim/latent_{species}.h
 (or final_{species}.h5ad) carrying obsm['X_scVI'], obsm['X_umap_scVI'] and one
 leiden_scVI_<res> obs column per resolution.
 
-Follows integrate_and_cluster.ipynb and Cevrim et al. Methods: HVGs selected with
-seurat_v3 per sample on genes other than mito/ribo, scVI trained on raw counts of the
-HVG subset with sample as batch, kNN graph and Leiden on the latent, UMAP on that graph.
-The notebook read raw counts from a layer named 'raw'; in this pipeline the layer is
-'counts' and its name arrives as params.counts_layer.
+HVGs are selected with seurat_v3 per sample on genes other than mito/ribo, scVI is
+trained on raw counts of the HVG subset with sample as batch, then a kNN graph and
+Leiden on the latent and UMAP on that graph. The raw-counts layer name arrives as
+params.counts_layer.
 """
 import time
 import numpy as np
@@ -28,8 +27,7 @@ counts_layer = snakemake.params.counts_layer  # noqa: F821
 
 # Parameters ----
 
-# Defaults are the values used in Cevrim et al. Methods; config['scvi'] and
-# config['leiden'] override them.
+# config['scvi'] and config['leiden'] override these defaults.
 SEED = cfg.get("seed", 0)
 scvi_cfg = cfg.get("scvi", {})
 leiden_cfg = cfg.get("leiden", {})
@@ -79,7 +77,7 @@ with open(logfile, "w") as log:
 
     # Label mito and ribosomal genes ----
 
-    # Prefix lists cover mouse (mt-, Rps), human (MT-, RPS) and lower-case symbols.
+    # One prefix list serves both species: mouse symbols are capitalised, human upper-case.
     mito_mask = adata.var_names.str.startswith(("mt-", "Mt-", "MT-"))
     adata.var["mito"] = mito_mask
     ribo_mask = adata.var_names.str.startswith((
@@ -129,7 +127,7 @@ with open(logfile, "w") as log:
     adata.X = adata.layers[counts_layer].copy()
     sc.pp.normalize_total(
         adata,
-        target_sum=1e4,  # counts per cell, as in the notebook
+        target_sum=1e4,  # counts per nucleus (CP10K)
         exclude_highly_expressed=False,
         inplace=True,
     )

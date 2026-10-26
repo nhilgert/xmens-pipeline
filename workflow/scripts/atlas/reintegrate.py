@@ -3,9 +3,9 @@
 Reads one lineage subset, data/interim/lineages/{species}_{lineage}.h5ad, with raw
 counts in layers[params.counts_layer] and writes data/interim/latent_{species}_{lineage}.h5ad
 with obsm['X_scVI'], obsm['X_umap_scVI'] and the leiden_scVI_<res> ladder the clustree
-step consumes. No cell is removed. Same scVI procedure and hyperparameters as
-integrate.py, with HVGs reselected on the subset to recover within-lineage variation
-the global fit blurred.
+step consumes. No cell is removed. The scVI settings are those of integrate.py; HVGs
+are reselected on the pooled subset (no per-sample batch in the selection, see below)
+to recover within-lineage variation the global fit blurred.
 """
 import time
 import numpy as np
@@ -24,8 +24,7 @@ counts_layer = snakemake.params.counts_layer  # noqa: F821
 
 # Parameters ----
 
-# Defaults are the values used in Cevrim et al. Methods; config['scvi'] and
-# config['leiden'] override them.
+# config['scvi'] and config['leiden'] override these defaults.
 SEED = cfg.get("seed", 0)
 scvi_cfg = cfg.get("scvi", {})
 leiden_cfg = cfg.get("leiden", {})
@@ -71,7 +70,7 @@ with open(logfile, "w") as log:
 
     # Label mito and ribosomal genes ----
 
-    # Same prefix lists as integrate.py: mouse (mt-, Rps), human (MT-, RPS), lower case.
+    # One prefix list serves both species: mouse symbols are capitalised, human upper-case.
     adata.var["mito"] = adata.var_names.str.startswith(("mt-", "Mt-", "MT-"))
     adata.var["ribo"] = adata.var_names.str.startswith((
         "rps", "rpl", "mrps", "mrpl",
@@ -83,8 +82,7 @@ with open(logfile, "w") as log:
     # HVG reselection on the subset ----
 
     # No batch_key here, unlike integrate.py: seurat_v3 fits a per-batch loess, and
-    # samples with only tens of cells in a lineage (35 in mouse epithelial) make it
-    # singular. HVGs come from the pooled subset; scVI below still corrects by batch.
+    # samples with only tens of nuclei in a lineage make it singular. HVGs come from the pooled subset; scVI below still corrects by batch.
     if EXCLUDE_MITO_RIBO:
         adata_hvg = adata[:, (~adata.var["mito"]) & (~adata.var["ribo"])].copy()
     else:

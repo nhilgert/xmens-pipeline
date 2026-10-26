@@ -7,9 +7,9 @@ Reads the objects of config vocab_migration.from_release, annotation_vocabulary.
 and, for each subtype split in config vocab_migration.subtype_splits, the pinned
 clustering and its decision CSV. Writes the relabeled objects and a TSV of every
 label value changed with the number of cells. Expression, embeddings and every other
-obs column are left as they are. The script fails if anything besides the label
-columns differs, or if a split does not reproduce the counts recorded in the
-vocabulary's content task.
+obs column are left as they are; uns gains the schema version and display names. The
+script fails if any other obs column differs, or if a split does not reproduce the
+counts recorded in the vocabulary's content task.
 
 Outside Snakemake, --check prints the report without writing objects:
     python migrate_vocabulary.py --vocab V [--config config/config.yaml] \\
@@ -294,7 +294,7 @@ def main(
 if "snakemake" in globals():
     snk = snakemake  # noqa: F821 (injected by Snakemake)
 
-    # Snakemake does not capture prints from script: directives, so route them to the log.
+    # Route prints to the rule's log file.
     sys.stdout = sys.stderr = open(snk.log[0], "w")
     main(
         sources=[Path(p) for p in snk.input.objects],

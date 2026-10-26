@@ -7,7 +7,7 @@ and writes data/interim/qc_spatial_{species}.h5ad, with the original coordinates
 and x_um_qc/y_um_qc, x_um_rot/y_um_rot, spatial_qc_reason and tissue_section added,
 plus results/tables/spatial_qc_{species}.csv, a per-timepoint tally of the outcomes.
 
-Follows notebooks/01b_spatial_qc_mouse.ipynb. Only coordinates drive the decisions
+Only coordinates drive the decisions
 (kNN distance, exact duplicates, hand-drawn boxes): annotations ride along on the
 object but are never an input. A cell whose coordinate fails is set to NaN, so
 expression, annotation and every cell count are untouched. Stages run in the order

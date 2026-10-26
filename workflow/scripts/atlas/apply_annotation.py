@@ -20,12 +20,18 @@ __all__ = [
 
 # Choices ----
 
-def load_choices(csv) -> dict:
-    """cluster -> label, from the committed two-column record."""
+def load_choices(csv, res: str | None = None) -> dict:
+    """cluster -> label, from the committed record (cluster, label, n_cells, res, note).
+
+    When `res` is given, the record's own `res` column must name the same clustering:
+    a table applied at another resolution would map the wrong clusters silently.
+    """
     df = pd.read_csv(csv, dtype=str)
     need = {"cluster", "label"}
     if not need <= set(df.columns):
         raise ValueError(f"{csv}: needs columns {need}, has {list(df.columns)}")
+    if res is not None and "res" in df.columns and not (df["res"] == res).all():
+        raise ValueError(f"{csv}: res column {sorted(set(df['res']))} does not match {res!r}")
 
     cluster = df["cluster"].str.strip()
     label = df["label"].str.strip()
@@ -98,8 +104,8 @@ def apply_map(adata, res: str, choices: dict, rollup: dict | None = None,
               output_mode: str = "fine"):
     """Apply a frozen map as either internal lineage or canonical annotations.
 
-    Returns a per-cluster summary frame. Pure: no I/O, no plotting -- this is
-    what the pipeline and the notebooks share.
+    Writes the label columns into adata.obs and returns a per-cluster summary frame;
+    no file I/O, so the rules and the command line share it.
     """
     rollup = rollup or {}
     if res not in adata.obs:
@@ -177,8 +183,8 @@ def write_atlas(adata, out_h5ad, lineage_dir, ladder_dir, slug: dict, species: s
         raise ValueError(f"labels in the CSV with no slug in the spec: {sorted(unknown)}. "
                          f"Add them to atlas.<species>.labels or fix the CSV.")
 
-    # The annotated object drops EXCLUDE cells and the notebook scoring columns;
-    # lineage categories follow the spec's order.
+    # The annotated object drops EXCLUDE cells and the working columns (score_*, ref_*,
+    # label); lineage categories follow the spec's order.
     ann = adata[~adata.obs.excluded].copy()
     for c in [c for c in ann.obs if c.startswith(("score_", "ref_"))] + ["label"]:
         if c in ann.obs:
@@ -261,7 +267,7 @@ def _run(level, species, lineage, res, in_h5ad, csv, spec_path, vocab_path,
           f"{'/' + lineage if lineage else ''} | {Path(in_h5ad).name} | {res}")
 
     adata = sc.read_h5ad(in_h5ad)
-    choices = load_choices(csv)
+    choices = load_choices(csv, res)
 
     # Atlas level labels lineages and has no rollup; fine level writes canonical
     # cell_type/cell_subtype through the vocabulary rollup and validates them.

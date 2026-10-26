@@ -48,7 +48,7 @@ rule migrate_release_vocabulary:
     log:
         f"logs/04g_migrate_release_vocabulary_{DELIV_REL}.log",
     resources:
-        mem_mb=8000,   # measured 2.6 GB peak over the four 2026_09_15 objects (one at a time)
+        mem_mb=8000,   # objects are migrated one at a time
         runtime=30,    # measured 3 min
     script:
         "../scripts/deliverables/migrate_vocabulary.py"
@@ -69,7 +69,7 @@ rule finalize_deliverables:
     log:
         f"logs/04g_finalize_deliverables_{DELIV_REL}.log",
     resources:
-        mem_mb=32000,   # MB
+        mem_mb=32000,
         runtime=120,    # minutes
     script:
         "../scripts/deliverables/finalize_deliverables.py"

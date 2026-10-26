@@ -1,7 +1,7 @@
 # Stage 04b - per-lineage scVI reintegration.
 #
-# Sibling of 02_integrate: identical scVI procedure, applied to each
-# lineage sub-object written by stage 04. HVGs are RESELECTED on each subset --
+# Sibling of 02_integrate: the same scVI settings, applied to each
+# lineage sub-object written by stage 04. HVGs are reselected on each subset --
 # that is the point of reintegrating, since the global fit blurs within-lineage
 # structure.
 #

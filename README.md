@@ -49,8 +49,9 @@ and QC (doublet score, genes per nucleus), and that decision is the committed re
 that justify the call in `note`. `workflow/scripts/atlas/apply_annotation.py` applies the
 table; `resources/lineage_spec.yaml` holds the resolution and marker panel per lineage;
 `resources/annotation_vocabulary.yaml` is the allowed vocabulary and the subtype-to-type
-map, enforced when the release objects are written. `tools/cluster_marker_table.py` recomputes the
-per-cluster marker detection fractions the notes were written from.
+map, enforced when the release objects are written. `tools/cluster_marker_table.py` computes the per-cluster
+marker detection, QC and co-expression table and `tools/write_annotation_notes.py` writes
+the `note` column from it, so every note can be regenerated.
 
 One executed notebook per table under `notebooks/annotation/` shows the evidence each
 table was decided from: the table, the marker dot plot by cluster, QC per cluster, the

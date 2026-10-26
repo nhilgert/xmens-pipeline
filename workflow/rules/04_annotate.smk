@@ -4,8 +4,8 @@
 # with "MissingInputException" naming the decision you haven't made yet; editing
 # it re-runs everything downstream on the next invocation.
 #
-# One rule per species so the lineage subsets can be declared as real outputs
-# (they're what 04b_reintegrate consumes).
+# One rule per species, so that the per-lineage subsets 04b_reintegrate consumes are
+# declared outputs (the script writes them under params.repo, which is this directory).
 
 import yaml as _yaml
 _SPEC = _yaml.safe_load(open("resources/lineage_spec.yaml"))

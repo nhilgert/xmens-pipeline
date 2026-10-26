@@ -19,11 +19,9 @@ import pandas as pd
 import yaml
 
 
-# The fibroblast/decidual object holds exactly these two cell types; its size is
-# decidual_cell + endometrial_fibroblast from expected_coarse_counts in
-# resources/annotation_vocabulary.yaml.
+# The fibroblast/decidual object holds exactly these two cell types; its expected size
+# is their sum in the vocabulary's expected_coarse_counts.
 FIBDEC = {"decidual_cell", "endometrial_fibroblast"}
-FIBDEC_N = {"human": 47533, "mouse": 43197}  # cells
 
 
 def canonical_sets(vocab):
@@ -180,43 +178,25 @@ def validate_h5ad(path: Path, species: str, role: str, vocab: dict):
         failures.append(f"invalid subtype-parent pairs: {invalid_pairs}")
 
     # Count gates ----
-    # Expected counts are the cell numbers in the final_* objects, as recorded in
-    # resources/annotation_vocabulary.yaml (expected_coarse_counts and the
-    # subtype fill counts). The literals below are those numbers, except mouse
-    # epithelial_cell 6265, which predates mouse_epithelial_split (the vocabulary
-    # records 987 for v3).
+    # Expected numbers are the vocabulary's expected_coarse_counts and
+    # expected_subtype_counts (the per-label sum of the committed annotation tables).
     if role in {"refined", "final", "all_deposit"}:
         actual_counts = types.value_counts()
         for label, expected in vocab["expected_coarse_counts"][species].items():
             gate(f"cell_type:{label}", int(expected), int(actual_counts.get(label, 0)))
         gate("total_cells", int(vocab["expected_coarse_counts"]["totals"][species]), obj.n_obs)
+        gate("cell_subtype_empty", 0, empty_count)
+        actual_subtypes = subtypes.value_counts()
+        expected_subtypes = vocab["expected_subtype_counts"][species]
+        for label, expected in expected_subtypes.items():
+            gate(f"cell_subtype:{label}", int(expected), int(actual_subtypes.get(label, 0)))
+        for label in set(actual_subtypes.index) - set(expected_subtypes):
+            gate(f"cell_subtype:{label}", 0, int(actual_subtypes[label]))
     if role in {"fibdec", "fibdec_deposit"}:
         if set(types) != FIBDEC:
             failures.append(f"fib/dec object has cell_type values {sorted(set(types))}")
-        gate("fibdec_total", FIBDEC_N[species], obj.n_obs)
-
-    # Subtype gates: endothelial blood/lymph split, no empty subtypes, and the
-    # number of cells that stay at the coarse label within each split cell type.
-    if species == "human" and role in {"refined", "final", "all_deposit"}:
-        gate("endothelial_blood", 828, int((subtypes == "endothelial_blood").sum()))
-        gate("endothelial_lymph", 506, int((subtypes == "endothelial_lymph").sum()))
-        gate("cell_subtype_empty", 0, empty_count)
-        for label, expected in (("decidual_cell", 21648),
-                                ("endometrial_fibroblast", 25885),
-                                ("epithelial_cell", 10608),
-                                ("perivascular_cell", 471),
-                                ("smooth_muscle_cell", 2084)):
-            gate(f"{label}_coarse_subtype", expected,
-                 int(((types == label) & (subtypes == label)).sum()))
-    if species == "mouse" and role in {"refined", "final", "all_deposit"}:
-        gate("endothelial_blood", 3487, int((subtypes == "endothelial_blood").sum()))
-        gate("endothelial_lymph", 0, int((subtypes == "endothelial_lymph").sum()))
-        gate("cell_subtype_empty", 0, empty_count)
-        for label, expected in (("epithelial_cell", 6265),
-                                ("smooth_muscle_cell", 1443),
-                                ("perimetrial_cell", 550)):
-            gate(f"{label}_coarse_subtype", expected,
-                 int(((types == label) & (subtypes == label)).sum()))
+        expected_fibdec = sum(vocab["expected_coarse_counts"][species][t] for t in FIBDEC)
+        gate("fibdec_total", expected_fibdec, obj.n_obs)
 
     # uns metadata ----
     # Reannotated objects predate the schema stamp, so only later roles carry it.

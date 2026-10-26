@@ -20,42 +20,32 @@ import textwrap
 from pathlib import Path
 
 import nbformat
+import pandas as pd
 import yaml
 
 OUT_DIR = Path("notebooks/annotation")
 SPEC = yaml.safe_load(open("resources/lineage_spec.yaml"))
 
-# Fine-type markers read on the dot plots when the lineage tables were made, by label.
-# They are shown next to the lineage panel from lineage_spec.yaml.
-FINE_MARKERS = {
-    "mouse": {
-        "stromal": ["Prl8a2", "Bmp2", "Wnt4", "Hand2", "Ptgs2", "Mki67", "Top2a", "Cdkn1a"],
-        "immune": ["Adgre1", "C1qa", "Mrc1", "Csf1r", "Ly6c2", "Ccr2", "Plac8", "Flt3", "Xcr1",
-                   "H2-Ab1", "Cd79a", "Ms4a1", "Cd3e", "Cd3d", "Cd4", "Cd8a", "Trdc", "Ncr1",
-                   "Eomes", "Itga1", "Gzmb", "Gzmc", "Prf1", "Itgax", "Mki67", "Top2a"],
-        "epithelial": ["Wnt7a", "Foxa2", "Prss28", "Prss29", "Ihh", "Lif", "Lgr5", "Foxj1",
-                       "Mki67", "Top2a"],
-        "vascular": ["Pecam1", "Flt1", "Cldn5", "Cdh5", "Prox1", "Lyve1"],
-        "smc": ["Acta2", "Myh11", "Tagln", "Des", "Cnn1"],
-        "perimetrium": ["Msln", "Upk3b", "Wt1", "Sox6"],
-    },
-    "human": {
-        "stromal": ["PRL", "IGFBP1", "LEFTY2", "FOXO1", "PDGFRA", "DCN", "LUM", "RGS5", "NOTCH3",
-                    "MCAM", "MKI67"],
-        "immune": ["CD68", "C1QA", "MRC1", "CD14", "CD3E", "CD8A", "CD4", "IL7R", "FOXP3", "CTLA4",
-                   "IL2RA", "TRDC", "KIT", "CPA3", "TPSAB1", "NCAM1", "KLRD1", "GZMB", "ITGAX",
-                   "MKI67"],
-        "epithelial": ["WNT7A", "FOXA2", "LIF", "SCGB1D2", "PAEP", "FOXJ1", "MKI67"],
-        "perivascular": ["PECAM1", "FLT1", "VWF", "PROX1", "LYVE1", "CCL21", "PDPN"],
-        "smc": ["ACTA2", "MYH11", "TAGLN", "DES", "CNN1"],
-    },
-}
-ATLAS_MARKERS = {
-    "mouse": ["Pdgfra", "Col1a1", "Prl8a2", "Cdh1", "Pax8", "Epcam", "Ptprc", "Pecam1", "Flt1",
-              "Acta2", "Myh11", "Msln", "Upk3b", "Wt1"],
-    "human": ["PDGFRA", "DCN", "PRL", "IGFBP1", "CDH1", "PAX8", "EPCAM", "PTPRC", "PECAM1", "FLT1",
-              "RGS5", "ACTA2", "MYH11"],
-}
+
+def lineage_panel_genes(species):
+    """Lineage-role genes of the atlas marker panel named by the spec."""
+    panel = pd.read_csv(Path("resources/markers") / SPEC["atlas"][species]["panel"],
+                        sep="\t", comment="#")
+    return [g for genes in panel[panel.role == "lineage"].genes for g in genes.split(",")]
+
+
+def panel_genes(species, level):
+    """Every gene the notebook's dot plot shows: the panel plus the label markers."""
+    if level == "lineage":
+        groups = [lineage_panel_genes(species)]
+        label_markers = SPEC["atlas"][species]["label_markers"]
+    else:
+        lineage = SPEC["species"][species]["lineages"][level]
+        groups = list(lineage["markers"].values())
+        label_markers = lineage["label_markers"]
+    genes = [g for group in groups for g in group]
+    genes += [g for gs in label_markers.values() for g in gs]
+    return list(dict.fromkeys(genes))
 
 
 def markdown(text):
@@ -149,9 +139,11 @@ def notebook(species, level, resolution, object_path, table_path, panel, title, 
         ## 4. QC per cluster
 
         Median DoubletDetection score and genes per nucleus per cluster, with the lineage
-        median for reference. A high doublet score together with markers of another lineage
-        (section 6) is what an EXCLUDE call rests on; a moderate score alone is not
-        (cycling clusters score around 1 throughout this dataset).
+        median for reference (the CSV notes quote the lineage's doublet 75th and genes 25th
+        percentiles, from `tools/cluster_marker_table.py`). A high doublet score together
+        with markers of another lineage (section 6) is what an EXCLUDE call rests on; a
+        moderate score alone is not (cycling clusters score around 1 throughout this
+        dataset).
         """),
         code("""
         qc_cols = [c for c in ("doubletdetection_doublet_score", "n_genes_by_counts",
@@ -234,7 +226,7 @@ def write_all():
         nb = nbformat.v4.new_notebook()
         nb.cells = notebook(
             species, "lineage", atlas["res"], f"data/interim/latent_{species}.h5ad",
-            f"resources/annotations/{species}_lineage.csv", ATLAS_MARKERS[species],
+            f"resources/annotations/{species}_lineage.csv", panel_genes(species, "lineage"),
             f"{species.capitalize()} atlas: lineage annotation (stage 04)",
             "Every cluster of the whole-tissue scVI clustering is assigned one lineage (or "
             "EXCLUDE); the lineage objects re-integrated in 04b are cut from these labels.")
@@ -244,8 +236,7 @@ def write_all():
 
         for lineage, lineage_spec in species_spec["lineages"].items():
             resolution = lineage_spec.get("res", SPEC["defaults"]["res"])
-            panel = [g for group in lineage_spec["markers"].values() for g in group]
-            panel += [g for g in FINE_MARKERS[species].get(lineage, []) if g not in panel]
+            panel = panel_genes(species, lineage)
             nb = nbformat.v4.new_notebook()
             nb.cells = notebook(
                 species, lineage, resolution, f"data/interim/latent_{species}_{lineage}.h5ad",

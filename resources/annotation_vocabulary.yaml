@@ -135,8 +135,8 @@ content_tasks:
         - {cell_type: smooth_muscle_cell, expected_coarse_fill_count: 1443}
         - {cell_type: perimetrial_cell, expected_coarse_fill_count: 550}
       human:
-        - {cell_type: decidual_cell, expected_coarse_fill_count: 21648}
-        - {cell_type: endometrial_fibroblast, expected_coarse_fill_count: 25885}
+        - {cell_type: decidual_cell, expected_coarse_fill_count: 23108}           # stromal clusters 11 and 24 relabelled fibroblast -> decidual, 2026-09
+        - {cell_type: endometrial_fibroblast, expected_coarse_fill_count: 24425}
         - {cell_type: epithelial_cell, exclude_cell_subtypes: [epithelial_ciliated], expected_coarse_fill_count: 10608}
         - {cell_type: smooth_muscle_cell, expected_coarse_fill_count: 2084}
         # NOTE: perivascular_cell (471) is NOT listed here in v2. Those cells get
@@ -145,7 +145,7 @@ content_tasks:
         # too would double-count them. v1 listed them because it had no split.
     expected_total_fills:
       mouse: 2980   # v3: 987 epithelial + 1443 smooth muscle + 550 perimetrial (was 8258)
-      # 21648 + 25885 + 10608 + 2084 = 60225. (v1 said 60696, which double-counted
+      # 23108 + 24425 + 10608 + 2084 = 60225. (v1 said 60696, which double-counted
       # the 471 perivascular mural cells now assigned by the split — verified
       # against refined_human on 2026-08-28: actual fills = 60,225.)
       human: 60225
@@ -154,9 +154,60 @@ content_tasks:
 # Expected coarse counts (for post-migration validation, from final_* objects)
 # ----------------------------------------------------------------------------
 expected_coarse_counts:
-  human:  { decidual_cell: 21648, endometrial_fibroblast: 25885, epithelial_cell: 10699, immune_cell: 4709, smooth_muscle_cell: 2084, endothelial_cell: 1334, perivascular_cell: 471 }
+  human:  { decidual_cell: 23108, endometrial_fibroblast: 24425, epithelial_cell: 10699, immune_cell: 4709, smooth_muscle_cell: 2084, endothelial_cell: 1334, perivascular_cell: 471 }
   mouse:  { decidual_cell: 22919, endometrial_fibroblast: 20278, epithelial_cell: 6265, immune_cell: 2091, smooth_muscle_cell: 1443, endothelial_cell: 3487, perimetrial_cell: 550 }
   totals: { human: 66830, mouse: 57033 }
+
+# ----------------------------------------------------------------------------
+# Expected cell_subtype counts in the released All_Cells objects: the sum of n_cells per
+# label over resources/annotations/*.csv (EXCLUDE rows left out). merge_reannotated and
+# check_annotations gate every subtype value against this block. A cell type without
+# subtypes appears under its own name (the coarse fill).
+# ----------------------------------------------------------------------------
+expected_subtype_counts:
+  human:
+    endometrial_fibroblast: 24425
+    decidual_cell: 23108
+    epithelial_cell: 10608
+    smooth_muscle_cell: 2084
+    t_cell_cd8: 1474
+    t_cell_cd4: 856
+    endothelial_blood: 828
+    macrophage: 664
+    unk_cell_gzmb_low_itgax_low: 608
+    endothelial_lymph: 506
+    perivascular_cell: 471
+    unk_cell_gzmb_high_itgax_high: 460
+    t_cell_regulatory: 299
+    mast_cell: 179
+    t_cell_gamma_delta: 169
+    epithelial_ciliated: 91
+  mouse:
+    decidual_proliferative: 14434
+    efib_middle_induced: 8775
+    efib_middle: 4764
+    efib_subluminal: 3886
+    decidual_mature: 3856
+    decidual_boundary: 3722
+    endothelial_blood: 3487
+    epithelial_glandular: 2828
+    epithelial_luminal: 2450
+    efib_outer: 2073
+    smooth_muscle_cell: 1443
+    epithelial_cell: 987
+    decidual_apoptotic: 907
+    macrophage: 797
+    efib_proliferative: 780
+    perimetrial_cell: 550
+    unk_cell: 436
+    monocyte: 204
+    unk_cell_proliferative: 154
+    macrophage_proliferative: 150
+    t_cell: 97
+    dendritic_cell: 90
+    unk_cell_cytotoxic: 73
+    t_cell_gamma_delta: 55
+    b_cell: 35
 
 # ----------------------------------------------------------------------------
 # Categorical order (for stable plotting/legends).

@@ -4,8 +4,8 @@ Called by rule `finalize_deliverables` (workflow/rules/04g_deliverables.smk). Re
 the source h5ads named in config[deliverables][sources] and annotation_vocabulary.yaml.
 Writes data/deliverables/<release>/<name>.h5ad for each source and MANIFEST.json.
 
-This is promotion, not regeneration: the deliverable objects are built and enriched
-by the notebooks, and this step makes the hand-off auditable and single-sourced.
+This is promotion, not regeneration: the source objects are produced upstream, and this
+step makes the hand-off auditable and single-sourced.
 Per object it streams a sha256 of the source, copies with mtime preserved, verifies
 the copy's sha256 (corruption check across filesystems), validates the canonical
 annotations with the same checker the pipeline uses

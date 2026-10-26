@@ -123,66 +123,22 @@ if invalid_pairs:
 
 # Count gates ----
 
-# Gates are evidence, not mutation instructions: a mismatch is recorded as SUSPECT.
-# The expected subtype counts repeat the content_tasks blocks of
-# annotation_vocabulary.yaml (human_perivascular_split, mouse_endothelial_blood_only,
-# coarse_subtype_fill); the coarse counts come from expected_coarse_counts.
+# Gates are evidence, not mutation instructions: a mismatch is recorded as SUSPECT. The
+# expected numbers are the vocabulary's expected_coarse_counts and expected_subtype_counts
+# (the latter is the per-label sum of the committed annotation tables).
 rows = []
-expected_types = vocab["expected_coarse_counts"][species]
 actual_types = merged.obs["cell_type"].astype(str).value_counts()
-for label, expected in expected_types.items():
+for label, expected in vocab["expected_coarse_counts"][species].items():
     rows.append(gate_row(f"cell_type:{label}", expected, int(actual_types.get(label, 0))))
 rows.append(gate_row("total_cells", vocab["expected_coarse_counts"]["totals"][species],
                      merged.n_obs))
 rows.append(gate_row("cell_subtype_empty", 0, empty_count))
 
-if species == "human":
-    actual_sub = merged.obs["cell_subtype"].astype(str).value_counts()
-    rows.extend([
-        gate_row("cell_subtype:endothelial_blood", 828,
-                 int(actual_sub.get("endothelial_blood", 0))),
-        gate_row("cell_subtype:endothelial_lymph", 506,
-                 int(actual_sub.get("endothelial_lymph", 0))),
-        gate_row("perivascular_coarse_subtype", 471,
-                 int(((merged.obs.cell_type.astype(str) == "perivascular_cell") &
-                      (merged.obs.cell_subtype.astype(str) == "perivascular_cell")).sum())),
-        gate_row("decidual_coarse_subtype", 21648,
-                 int(((types == "decidual_cell") & (subtypes == "decidual_cell")).sum())),
-        gate_row("fibroblast_coarse_subtype", 25885,
-                 int(((types == "endometrial_fibroblast") &
-                      (subtypes == "endometrial_fibroblast")).sum())),
-        gate_row("epithelial_coarse_subtype", 10608,
-                 int(((types == "epithelial_cell") &
-                      (subtypes == "epithelial_cell")).sum())),
-        gate_row("smooth_muscle_coarse_subtype", 2084,
-                 int(((types == "smooth_muscle_cell") &
-                      (subtypes == "smooth_muscle_cell")).sum())),
-    ])
-else:
-    actual_sub = merged.obs["cell_subtype"].astype(str).value_counts()
-
-    # Mouse epithelium is split into luminal/glandular; those counts live in the
-    # vocabulary's mouse_epithelial_split task.
-    epi_split = vocab["content_tasks"]["mouse_epithelial_split"]["expected_counts"]
-    rows.extend([
-        gate_row("cell_subtype:endothelial_blood", 3487,
-                 int(actual_sub.get("endothelial_blood", 0))),
-        gate_row("cell_subtype:endothelial_lymph", 0,
-                 int(actual_sub.get("endothelial_lymph", 0))),
-        gate_row("cell_subtype:epithelial_luminal", epi_split["epithelial_luminal"],
-                 int(actual_sub.get("epithelial_luminal", 0))),
-        gate_row("cell_subtype:epithelial_glandular", epi_split["epithelial_glandular"],
-                 int(actual_sub.get("epithelial_glandular", 0))),
-        gate_row("epithelial_coarse_subtype", epi_split["epithelial_cell"],
-                 int(((types == "epithelial_cell") &
-                      (subtypes == "epithelial_cell")).sum())),
-        gate_row("smooth_muscle_coarse_subtype", 1443,
-                 int(((types == "smooth_muscle_cell") &
-                      (subtypes == "smooth_muscle_cell")).sum())),
-        gate_row("mesothelial_coarse_subtype", 550,
-                 int(((types == "perimetrial_cell") &
-                      (subtypes == "perimetrial_cell")).sum())),
-    ])
+actual_subtypes = merged.obs["cell_subtype"].astype(str).value_counts()
+for label, expected in vocab["expected_subtype_counts"][species].items():
+    rows.append(gate_row(f"cell_subtype:{label}", expected, int(actual_subtypes.get(label, 0))))
+for label in set(actual_subtypes.index) - set(vocab["expected_subtype_counts"][species]):
+    rows.append(gate_row(f"cell_subtype:{label}", 0, int(actual_subtypes[label])))
 
 # Write the gate table and the merged object ----
 

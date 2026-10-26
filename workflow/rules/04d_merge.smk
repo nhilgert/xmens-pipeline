@@ -1,5 +1,7 @@
 # 04d_merge -- concatenate the cleaned per-lineage objects into one per-species
-# object. Throwbacks already carry their final label, so nothing moves here.
+# object. A cluster whose table assigns it another lineage's cell type (a throwback,
+# e.g. human stromal cluster 13 -> perivascular_cell) already carries that label from
+# 04c, so nothing moves here.
 # Output has NO embedding: composition changed, so 04e re-embeds from scratch.
 
 rule merge_reannotated:

@@ -22,7 +22,15 @@ species:
           luminal:   [Wnt7a, Muc1, Lgr5]
           glandular: [Foxa2, Ihh, Lif]
           contam:    [Flt1, Pecam1, Pdgfra, Prl8a2, Acta2, Myh11, Ptprc, Sox6]
+          glandular_fine: [Prss28, Prss29]
+          ciliated:   [Foxj1]
+          prolif:     [Mki67, Top2a]
+          epi_extra:  [Epcam]
         umap_genes: [Wnt7a, Foxa2, Ihh, Lgr5]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          epithelial_luminal: [Wnt7a, Foxa2, Prss28, Cdh1]
+          epithelial_glandular: [Foxa2, Prss28, Prss29, Wnt7a]
+          epithelial_cell: [Cdh1, Pax8, Wnt7a, Foxa2]
         # v3 (2026-10-25): luminal/glandular called per cluster in mouse_epithelial.csv
         # (see notes there and annotation_vocabulary.yaml content_tasks.mouse_epithelial_split).
         # Lgr5, Muc1, Ihh and Lif above did not separate the two; the calls use Wnt7a
@@ -36,6 +44,8 @@ species:
           epi:    [Cdh1, Pax8]
           contam: [Pdgfra, Prl8a2, Acta2, Myh11, Flt1, Pecam1, Ptprc]
         umap_genes: [Sox6, Msln, Upk3b, Wt1]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          perimetrial_cell: [Msln, Upk3b, Wt1]
 
       stromal:
         res: leiden_scVI_3.0
@@ -45,7 +55,18 @@ species:
           decidual:   [Prl8a2, Ptgs2, Bmp2, Wnt4, Hand2]
           prolif:     [Mki67, Top2a]
           contam:     [Cdh1, Pax8, Pecam1, Ptprc, Myh11, Sox6]
+          decidual_state: [Cdkn1a, Bax]
         umap_genes: [Pdgfra, Prl8a2, Bmp2, Mki67]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          decidual_boundary: [Prl8a2, Bmp2, Wnt4, Pdgfra]
+          decidual_mature: [Prl8a2, Bmp2, Wnt4, Hand2]
+          decidual_proliferative: [Prl8a2, Bmp2, Mki67, Top2a]
+          decidual_apoptotic: [Prl8a2, Bmp2, Cdkn1a, Bax]
+          efib_outer: [Pdgfra, Col1a1, Dcn, Prl8a2]
+          efib_middle: [Pdgfra, Col1a1, Dcn, Prl8a2]
+          efib_middle_induced: [Pdgfra, Col1a1, Prl8a2, Ptgs2]
+          efib_subluminal: [Pdgfra, Col1a1, Dcn, Prl8a2]
+          efib_proliferative: [Pdgfra, Col1a1, Mki67, Top2a]
 
       immune:
         res: leiden_scVI_3.0
@@ -57,7 +78,23 @@ species:
           nk:     [Ncr1, Gzmb, Prf1, Eomes]
           prolif: [Mki67, Top2a]
           contam: [Cdh1, Pdgfra, Pecam1, Myh11, Sox6]
+          monocyte:   [Ly6c2, Ccr2, Plac8]
+          dendritic:  [Flt3, Xcr1, H2-Ab1]
+          t_cell:     [Cd4, Cd8a, Trdc]
+          b_cell:     [Cd19]
+          unk:        [Itga1, Gzmc]
         umap_genes: [Ptprc, Csf1r, Cd3e, Gzmb]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          macrophage: [Adgre1, C1qa, Mrc1, Csf1r]
+          macrophage_proliferative: [Adgre1, C1qa, Mki67, Top2a]
+          monocyte: [Ly6c2, Ccr2, Plac8, Csf1r]
+          dendritic_cell: [Flt3, Xcr1, H2-Ab1, Itgax]
+          b_cell: [Cd79a, Ms4a1, Cd19]
+          t_cell: [Cd3e, Cd3d, Cd4, Cd8a]
+          t_cell_gamma_delta: [Trdc, Cd3e, Cd3d]
+          unk_cell: [Ncr1, Eomes, Itga1, Gzmb]
+          unk_cell_cytotoxic: [Gzmb, Gzmc, Prf1, Itgax]
+          unk_cell_proliferative: [Ncr1, Eomes, Mki67, Top2a]
 
       vascular:
         res: leiden_scVI_3.0
@@ -66,7 +103,10 @@ species:
           endothelial:  [Pecam1, Flt1, Cldn5, Cdh5]
           perivascular: [Pdgfrb, Rgs5, Acta2]
           contam:       [Cdh1, Pdgfra, Ptprc, Sox6]
+          lymphatic:  [Prox1, Lyve1]
         umap_genes: [Pecam1, Flt1, Rgs5]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          endothelial_blood: [Pecam1, Flt1, Cldn5, Cdh5]
         # Content task: every retained mouse vascular cell is blood endothelial.
 
       smc:
@@ -76,6 +116,8 @@ species:
           smc:    [Acta2, Myh11, Tagln, Des, Cnn1]
           contam: [Cdh1, Pdgfra, Pecam1, Ptprc, Sox6]
         umap_genes: [Acta2, Myh11, Tagln]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          smooth_muscle_cell: [Acta2, Myh11, Tagln, Des]
 
   human:
     lineages:
@@ -88,7 +130,14 @@ species:
           luminal:   [WNT7A, MUC1, LGR5]
           glandular: [FOXA2, LIF, SCGB1D2]
           contam:    [FLT1, PECAM1, PDGFRA, PTPRC, ACTA2]
+          secretory:  [PAEP]
+          ciliated:   [FOXJ1]
+          prolif:     [MKI67]
+          epi_extra:  [EPCAM]
         umap_genes: [CDH1, WNT7A, FOXA2]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          epithelial_cell: [CDH1, PAX8, EPCAM, FOXJ1]
+          epithelial_ciliated: [FOXJ1, CDH1, PAX8]
         # epithelial_ciliated (91 nuclei) was called de novo on this clustering: DE vs
         # the rest of the lineage is almost entirely axonemal (CFAP54/43/299, DNAH12/9/5,
         # RSPH1, ZBBX); ciliated score 1.289 vs next-best 0.078.
@@ -101,7 +150,12 @@ species:
           decidual:   [PRL, IGFBP1, LEFTY2, FOXO1]
           prolif:     [MKI67, TOP2A]
           contam:     [CDH1, PECAM1, PTPRC, ACTA2]
+          mural:      [RGS5, NOTCH3, MCAM, PDGFRB]
         umap_genes: [PDGFRA, PRL, IGFBP1]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          decidual_cell: [PRL, IGFBP1, LEFTY2, FOXO1]
+          endometrial_fibroblast: [PDGFRA, DCN, LUM, PRL]
+          perivascular_cell: [RGS5, NOTCH3, MCAM, PDGFRB]
 
       immune:
         res: leiden_scVI_3.0
@@ -113,7 +167,19 @@ species:
           nk:     [NCAM1, NCR1, KLRD1, GZMB]
           mast:   [TPSAB1, CPA3, MS4A2, KIT]
           contam: [CDH1, PDGFRA, PECAM1, ACTA2]
+          macrophage: [C1QA, MRC1, CD14]
+          t_cell:     [CD3D, IL7R, CTLA4, IL2RA, TRDC]
+          prolif:     [MKI67]
         umap_genes: [PTPRC, CSF1R, CD3E, GZMB]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          t_cell_cd8: [CD3E, CD8A, CD4]
+          t_cell_cd4: [CD3E, CD4, CD8A, IL7R]
+          t_cell_regulatory: [CD3E, CD4, FOXP3, CTLA4, IL2RA]
+          t_cell_gamma_delta: [TRDC, CD3E, KIT, IL7R]
+          macrophage: [CD68, C1QA, MRC1, CD14]
+          mast_cell: [CPA3, KIT, TPSAB1]
+          unk_cell_gzmb_high_itgax_high: [NCAM1, KLRD1, GZMB, ITGAX]
+          unk_cell_gzmb_low_itgax_low: [NCAM1, KLRD1, GZMB, ITGAX]
 
       perivascular:
         res: leiden_scVI_3.0
@@ -122,7 +188,12 @@ species:
           endothelial:  [PECAM1, FLT1, CLDN5, CDH5]
           perivascular: [PDGFRB, RGS5, ACTA2]
           contam:       [CDH1, PDGFRA, PTPRC]
+          blood:      [VWF]
+          lymphatic:  [PROX1, LYVE1, CCL21, PDPN]
         umap_genes: [PECAM1, RGS5]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          endothelial_blood: [PECAM1, FLT1, VWF, PROX1]
+          endothelial_lymph: [PROX1, LYVE1, CCL21, FLT1]
         # This lineage contains no pericytes (RGS5 max 0.11, NOTCH3 max 0.16, pericyte
         # co-expression 0.04 object-wide); it is two endothelial populations, 62% blood
         # (VWF/FLT1/MECOM) and 38% lymphatic (PROX1/RELN/FLT4/PDPN), with FLT1 going
@@ -135,6 +206,8 @@ species:
           smc:    [ACTA2, MYH11, TAGLN, DES, CNN1]
           contam: [CDH1, PDGFRA, PECAM1, PTPRC]
         umap_genes: [ACTA2, MYH11]
+        label_markers:                 # the genes that justify each label in the CSV notes
+          smooth_muscle_cell: [ACTA2, MYH11, TAGLN, DES]
 
 # =============================================================================
 # ATLAS level (stage 04): whole-tissue coarse lineage annotation.
@@ -146,6 +219,13 @@ atlas:
   mouse:
     res: leiden_scVI_2.5          # published ladder; nothing is re-clustered here
     panel: panel_mouse.tsv        # resources/markers/
+    label_markers:                # the genes that justify each lineage call in the CSV notes
+      stromal: [Pdgfra, Col1a1, Prl8a2]
+      epithelial: [Cdh1, Pax8, Epcam]
+      immune: [Ptprc]
+      vascular: [Pecam1, Flt1, Cldn5]
+      smc: [Acta2, Myh11, Tagln]
+      perimetrium: [Msln, Upk3b, Wt1]
     labels:                       # internal lineage routing value -> output slug
       stromal: stromal
       epithelial: epithelial
@@ -157,6 +237,12 @@ atlas:
   human:
     res: leiden_scVI_2.5
     panel: panel_human.tsv
+    label_markers:                # the genes that justify each lineage call in the CSV notes
+      stromal: [PDGFRA, DCN, PRL]
+      epithelial: [CDH1, PAX8, EPCAM]
+      immune: [PTPRC]
+      perivascular: [PECAM1, FLT1, RGS5]
+      smc: [ACTA2, MYH11, TAGLN]
     labels:                       # internal lineage routing value -> output slug
       stromal: stromal
       epithelial: epithelial
