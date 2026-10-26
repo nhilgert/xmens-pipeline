@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Generate the private 04c inspection notebooks from resources/lineage_spec.yaml.
+"""Generate the private stage-04c (per-lineage) re-annotation notebooks.
 
-One notebook per (species, lineage). They are SCAFFOLDING: you run them, look at
-the diagnostic table + dotplots, edit ONE cell (the DECISION cell), and they emit
+Reads the `species:` section of resources/lineage_spec.yaml and writes one
+notebooks/curation/04c_reannotate_{species}_{lineage}.ipynb per (species,
+lineage), assembled from the code-cell bodies defined below.
 
-    resources/annotations/{species}_{lineage}.csv     <- cluster,label  (COMMITTED)
-    data/interim/reannotated/{species}_{lineage}.h5ad <- cleaned object
-
-The CSV is the durable record; tools/compile_denovo.py turns it into the public
-de-novo notebook. These scaffolding notebooks are regenerable and gitignored.
+Each generated notebook is private scaffolding: the analyst runs it, reads the
+diagnostic table and dotplots, edits only the DECISION cell, and the notebook
+then writes
+    resources/annotations/{species}_{lineage}.csv     cluster,label (committed)
+    data/interim/reannotated/{species}_{lineage}.h5ad cleaned object for 04d_merge
+The CSV is the durable record, and tools/compile_denovo.py turns it into the
+public de-novo notebook. The scaffolding notebooks are regenerable and gitignored.
 
 Usage:
     python tools/gen_04c_notebooks.py                 # create missing only
@@ -31,9 +34,16 @@ a = ap.parse_args()
 spec = yaml.safe_load(open(a.spec))
 DEF, OUT = spec.get("defaults", {}), Path(a.outdir)
 OUT.mkdir(parents=True, exist_ok=True)
-STAMP = datetime.date.today().isoformat()
+STAMP = datetime.date.today().isoformat()  # written into each notebook's config cell
 
-# ---------------------------------------------------------------- static body
+
+# Notebook cell bodies ----
+# Each string below is one code cell of the generated notebook, in the order
+# they appear there. The config cell that build() writes first defines SPECIES,
+# LINEAGE, RES, COARSE, REF, REPO, REPO_SUB, MARKERS, UMAP_GENES, QC_COLS, AUTO,
+# FINE, COLLAPSE, LABELS and ROLLUP, which these bodies reference as globals.
+# Anything that looks like a comment inside the strings belongs to the notebook.
+
 BODY_IMPORTS = '''import warnings; warnings.filterwarnings("ignore")
 import scanpy as sc, pandas as pd, numpy as np
 from pathlib import Path
@@ -235,14 +245,21 @@ print(f"\\nnext:  python tools/compile_denovo.py --species {SPECIES} --res {RES}
       f"           --out notebooks/public/04c_annotate_{SPECIES}_{LINEAGE}_denovo.ipynb \\\\\\n"
       f"           --level fine --lineage {LINEAGE}")'''
 
-# ---------------------------------------------------------------- build one nb
+
+
+# Assemble one notebook ----
 def build(species, lineage, sp_cfg, lin):
+    """Notebook for one (species, lineage) from its spec entry; lineage keys override defaults."""
     res   = lin.get("res", DEF.get("res"))
     auto  = {**DEF.get("auto_exclude", {}), **lin.get("auto_exclude", {})}
     qc    = lin.get("qc_cols", DEF.get("qc_cols", []))
     fine  = lin.get("fine", {"mode": "none"})
     collapse = {**DEF.get("collapse", {}), **lin.get("collapse", {})}
     coarse = lin["coarse"]
+
+    # Fine labels and how each rolls up to a coarse label. Marker-rule lineages
+    # roll every fine label up to this lineage; CSV-transferred lineages may send
+    # a fine label to another coarse label (rollup_all, or by name prefix).
     if fine["mode"] == "markers":
         fine_labels = list(fine.get("from_groups", {}))
         rollup = {lab: coarse for lab in fine_labels}
@@ -251,17 +268,23 @@ def build(species, lineage, sp_cfg, lin):
         rollup = {}
         for lab in fine_labels:
             if "rollup_all" in fine:
-                rollup[lab] = fine["rollup_all"]; continue
+                rollup[lab] = fine["rollup_all"]
+                continue
             for pref, tgt in fine.get("rollup_prefix", {}).items():
-                if str(lab).startswith(pref): rollup[lab] = tgt; break
+                if str(lab).startswith(pref):
+                    rollup[lab] = tgt
+                    break
             else:
                 rollup[lab] = coarse
     else:
         fine_labels, rollup = [], {}
-    # coarse lineages a throwback can land in (all coarse labels across the species)
+
+    # A cluster whose deposited vote belongs to another lineage ("throwback") may
+    # be labelled with any coarse label of the species, so all of them are legal.
     others = sorted({d["coarse"] for d in sp_cfg["lineages"].values()} - {coarse})
     labels = [coarse] + fine_labels + sorted(set(rollup.values()) - {coarse}) + others
 
+    # The config cell: every per-lineage value the cell bodies above refer to.
     cfg = f'''# ---- generated {STAMP} from resources/lineage_spec.yaml -- edit the SPEC, not this
 SPECIES, LINEAGE = {json.dumps(species)}, {json.dumps(lineage)}
 RES    = {json.dumps(res)}
@@ -282,6 +305,7 @@ LABELS = {json.dumps(labels, indent=4)}
 # fine label -> coarse label (for the rolled-up coarse_refined column)
 ROLLUP = {json.dumps(rollup, indent=4)}'''
 
+    # Markdown headers interleaved with the code cells, in notebook order.
     fine_desc = {"none": "coarse only", "markers": "fine labels by marker rule",
                  "csv": f"fine labels transferred from {fine.get('csv','?')}"}[fine["mode"]]
     C = [
@@ -318,20 +342,29 @@ hand call in `OVERRIDES`."""), code(BODY_DECISION),
       md("## 8. Apply + check against the deposited object"), code(BODY_APPLY),
       md("## 9. Write the choices CSV *(committed)* + cleaned object"), code(BODY_WRITE),
     ]
+
     nb = new_notebook(cells=C)
     nb.metadata["kernelspec"] = {"display_name":"Python 3","language":"python","name":"python3"}
     nb.metadata["language_info"] = {"name":"python"}
     return nb
 
-# ------------------------------------------------------------------- generate
+
+# Write the notebooks ----
 made = skipped = 0
 for species, sp_cfg in spec["species"].items():
     for lineage, lin in sp_cfg["lineages"].items():
-        if a.only and a.only != f"{species}:{lineage}": continue
+        if a.only and a.only != f"{species}:{lineage}":
+            continue
         p = OUT/f"04c_reannotate_{species}_{lineage}.ipynb"
         if p.exists() and not a.force:
-            print(f"  skip (exists)  {p.name}"); skipped += 1; continue
+            print(f"  skip (exists)  {p.name}")
+            skipped += 1
+            continue
+
         nb = build(species, lineage, sp_cfg, lin)
-        nbf.validate(nb); nbf.write(nb, str(p))
-        print(f"  {'overwrote' if a.force else 'created  '}    {p.name}"); made += 1
+        nbf.validate(nb)
+        nbf.write(nb, str(p))
+        print(f"  {'overwrote' if a.force else 'created  '}    {p.name}")
+        made += 1
+
 print(f"\n{made} written, {skipped} skipped -> {OUT}")

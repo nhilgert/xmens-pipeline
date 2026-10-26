@@ -1,1 +1,4 @@
-"""xmens.gpu — TODO: migrate your gpu utilities here."""
+"""Placeholder for the GPU helpers that have not yet been moved into the package.
+
+Defines nothing, and reads and writes no files.
+"""

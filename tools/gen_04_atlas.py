@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Generate the private ATLAS-level (stage 04) annotation notebooks from the spec.
+"""Generate the private stage-04 (whole-tissue lineage) annotation notebooks.
 
-Sibling of gen_04c_notebooks.py, same spec (resources/lineage_spec.yaml, `atlas:`
-section), same three-stage flow -- just at whole-tissue coarse level:
+Reads the `atlas:` section of resources/lineage_spec.yaml and writes one
+notebooks/curation/04_annotate_{species}.ipynb per species, assembled from the
+code-cell bodies defined below. Sibling of gen_04c_notebooks.py, which does the
+same per lineage.
 
-    04_annotate_{species}.ipynb   (private scaffolding, you inspect + decide)
-        -> resources/annotations/{species}_lineage.csv     cluster,label  [COMMITTED]
-        -> data/interim/annotated_{species}.h5ad
-        -> data/interim/lineages/{species}_{slug}.h5ad     (feeds 04b_reintegrate)
-        -> results/tables/clusters/{species}/leiden_*.csv  (feeds the R clustree)
-
-    tools/compile_denovo.py --level lineage  ->  public de-novo notebook
+Each generated notebook is private scaffolding: the analyst runs it, edits only
+the DECISION cell, and the notebook then writes
+    resources/annotations/{species}_lineage.csv     cluster,label (committed)
+    data/interim/annotated_{species}.h5ad
+    data/interim/lineages/{species}_{slug}.h5ad     (input to 04b_reintegrate)
+    results/tables/clusters/{species}/leiden_*.csv  (input to the R clustree)
+tools/compile_denovo.py --level lineage then compiles the CSV into the public
+de-novo notebook.
 
 Usage:
     python tools/gen_04_atlas.py            # create missing only
@@ -30,10 +33,21 @@ ap.add_argument("--only", default=None, help="species")
 a = ap.parse_args()
 
 spec = yaml.safe_load(open(a.spec))
-if "atlas" not in spec: sys.exit("spec has no `atlas:` section")
+if "atlas" not in spec:
+    sys.exit("spec has no `atlas:` section")
 DEF = spec.get("defaults", {})
-OUT = Path(a.outdir); OUT.mkdir(parents=True, exist_ok=True)
-STAMP = datetime.date.today().isoformat()
+
+OUT = Path(a.outdir)
+OUT.mkdir(parents=True, exist_ok=True)
+STAMP = datetime.date.today().isoformat()  # written into each notebook's config cell
+
+
+# Notebook cell bodies ----
+# Each string below is one code cell of the generated notebook, in the order
+# they appear there. The config cell (built per species in the loop at the
+# bottom) defines SPECIES, RES, REF, PANEL_FILE, REPO, REPO_SUB, COLLAPSE,
+# LABELS, SLUG, QC_COLS and AUTO, which these bodies reference as globals.
+# Anything that looks like a comment inside the strings belongs to the notebook.
 
 IMPORTS = '''from pathlib import Path
 import warnings; warnings.filterwarnings("ignore")
@@ -269,12 +283,21 @@ print(f"\\nnext:  python tools/compile_denovo.py --species {SPECIES} --res {RES}
       f"           --csv resources/annotations/{SPECIES}_lineage.csv \\\\\\n"
       f"           --out notebooks/public/04_annotate_{SPECIES}_denovo.ipynb --level lineage")'''
 
+
+
+# Assemble one notebook per species ----
 made = skipped = 0
 for species, cfg in spec["atlas"].items():
-    if a.only and a.only != species: continue
+    if a.only and a.only != species:
+        continue
     p = OUT/f"04_annotate_{species}.ipynb"
     if p.exists() and not a.force:
-        print(f"  skip (exists)  {p.name}"); skipped += 1; continue
+        print(f"  skip (exists)  {p.name}")
+        skipped += 1
+        continue
+
+    # The config cell: every per-species value the cell bodies above refer to.
+    # Per-species auto_exclude thresholds override the spec defaults.
     labels = list(cfg["labels"])
     conf = f'''# ---- generated {STAMP} from resources/lineage_spec.yaml (`atlas:`) -- edit the SPEC
 SPECIES = {json.dumps(species)}
@@ -292,6 +315,7 @@ SLUG   = {json.dumps(cfg["labels"], indent=4)}
 QC_COLS = {json.dumps(cfg.get("qc_cols", DEF.get("qc_cols", [])))}
 AUTO    = {json.dumps({**DEF.get("auto_exclude", {}), **cfg.get("auto_exclude", {})})}'''
 
+    # Markdown headers interleaved with the code cells, in notebook order.
     C = [md(f"""# 04 — {species} coarse lineage annotation  *(private scaffolding)*
 
 Generated {STAMP} from `resources/lineage_spec.yaml` (`atlas:` section) —
@@ -312,9 +336,14 @@ reintegrates**, and the leiden ladder the R clustree script reads."""),
         md("""## 8. ★ DECISION — the only cell you edit ★"""), code(DECISION),
         md("## 9. Apply + validate against the deposited object"), code(APPLY),
         md("## 10. Write the record, the object, the lineage subsets, the ladder"), code(WRITE)]
+
     nb = new_notebook(cells=C)
     nb.metadata["kernelspec"] = {"display_name":"Python 3","language":"python","name":"python3"}
     nb.metadata["language_info"] = {"name":"python"}
-    nbf.validate(nb); nbf.write(nb, str(p))
-    print(f"  {'overwrote' if a.force else 'created  '}    {p.name}"); made += 1
+
+    nbf.validate(nb)
+    nbf.write(nb, str(p))
+    print(f"  {'overwrote' if a.force else 'created  '}    {p.name}")
+    made += 1
+
 print(f"\n{made} written, {skipped} skipped -> {OUT}")
