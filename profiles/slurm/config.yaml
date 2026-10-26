@@ -43,11 +43,6 @@ set-resources:
     cpus_per_task: 8
     gres: "gpu:1"
     slurm_extra: ""
-  # Annotation migration: staging-only whole-atlas re-embedding.
-  reembed_migrated:
-    runtime: 240
-    mem_mb: 64000
-    cpus_per_task: 8
     gres: "gpu:1"
     slurm_extra: ""
   # Daytime scratch-only per-timepoint scVI pseudotime tests.

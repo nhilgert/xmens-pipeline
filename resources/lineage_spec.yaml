@@ -1,22 +1,13 @@
 # resources/lineage_spec.yaml
 # Per-lineage annotation settings: the clustering resolution each lineage is annotated
-# at, the marker panel the clusters were read against, and the fine labels a lineage may
-# carry. Labels themselves live in resources/annotations/{species}_{lineage}.csv, one
-# row per cluster, each decided from the cluster's marker dot plot and QC. Nothing here
-# assigns a label; apply_annotation.py reads `fine.labels` and `rollup_*` only to map
-# each fine label to its coarse cell type.
-#
-# fine.labels   - the fine labels allowed in this lineage's CSV
-# rollup_all    - every fine label rolls up to this coarse label
-# rollup_prefix - fine label prefix -> coarse label
+# at (`res`, read by 04c_reannotate, check_annotations and cluster_marker_table) and the
+# marker panel the clusters were read against (`markers`, `umap_genes`). Labels live in
+# resources/annotations/{species}_{lineage}.csv, one row per cluster, each decided from
+# the cluster's marker dot plot and QC; the allowed labels and the subtype -> cell type
+# map are resources/annotation_vocabulary.yaml. Nothing here assigns a label.
 
 defaults:
   res: leiden_scVI_3.0
-  auto_exclude:
-    doublet_score: 999      # disabled -- exclusions are marker-based, by hand
-    doublet_frac: 999
-  qc_cols: [n_genes_by_counts, total_counts, pct_counts_mt, pct_counts_ribo,
-            doubletdetection_doublet_score]
 
 species:
 
@@ -36,11 +27,6 @@ species:
         # (see notes there and annotation_vocabulary.yaml content_tasks.mouse_epithelial_split).
         # Lgr5, Muc1, Ihh and Lif above did not separate the two; the calls use Wnt7a
         # (luminal) and Foxa2/Prss28/Prss29 (glandular) plus spatial neighbourhood.
-        fine:
-          labels: [epithelial_luminal, epithelial_glandular]
-          rollup_all: epithelial_cell
-          # note: Sox6 is in `contam` on purpose -- broadly expressed, so a Sox6-high
-          # epithelial cluster WITHOUT the Msln/Upk3b/Wt1 trio is still epithelium.
 
       perimetrium:
         res: leiden_scVI_3.0
@@ -50,7 +36,6 @@ species:
           epi:    [Cdh1, Pax8]
           contam: [Pdgfra, Prl8a2, Acta2, Myh11, Flt1, Pecam1, Ptprc]
         umap_genes: [Sox6, Msln, Upk3b, Wt1]
-        fine: {}
 
       stromal:
         res: leiden_scVI_3.0
@@ -61,13 +46,6 @@ species:
           prolif:     [Mki67, Top2a]
           contam:     [Cdh1, Pax8, Pecam1, Ptprc, Myh11, Sox6]
         umap_genes: [Pdgfra, Prl8a2, Bmp2, Mki67]
-        fine:
-          labels: [decidual_boundary, decidual_proliferative, decidual_mature,
-                   decidual_apoptotic, efib_outer, efib_middle,
-                   efib_middle_induced, efib_subluminal, efib_proliferative]
-          rollup_prefix:                  # fine label prefix -> coarse label
-            decidual_: decidual_cell
-            efib_: endometrial_fibroblast
 
       immune:
         res: leiden_scVI_3.0
@@ -80,12 +58,6 @@ species:
           prolif: [Mki67, Top2a]
           contam: [Cdh1, Pdgfra, Pecam1, Myh11, Sox6]
         umap_genes: [Ptprc, Csf1r, Cd3e, Gzmb]
-        fine:
-          labels: [macrophage, macrophage_proliferative, monocyte, dendritic_cell,
-                   b_cell, t_cell, t_cell_gamma_delta,
-                   unk_cell_cytotoxic, unk_cell,
-                   unk_cell_proliferative]
-          rollup_all: immune_cell
 
       vascular:
         res: leiden_scVI_3.0
@@ -96,9 +68,6 @@ species:
           contam:       [Cdh1, Pdgfra, Ptprc, Sox6]
         umap_genes: [Pecam1, Flt1, Rgs5]
         # Content task: every retained mouse vascular cell is blood endothelial.
-        fine:
-          labels: [endothelial_blood]
-          rollup_all: endothelial_cell
 
       smc:
         res: leiden_scVI_3.0
@@ -107,7 +76,6 @@ species:
           smc:    [Acta2, Myh11, Tagln, Des, Cnn1]
           contam: [Cdh1, Pdgfra, Pecam1, Ptprc, Sox6]
         umap_genes: [Acta2, Myh11, Tagln]
-        fine: {}
 
   human:
     lineages:
@@ -121,13 +89,9 @@ species:
           glandular: [FOXA2, LIF, SCGB1D2]
           contam:    [FLT1, PECAM1, PDGFRA, PTPRC, ACTA2]
         umap_genes: [CDH1, WNT7A, FOXA2]
-        fine:
-          # `labels` is what build_rollup keys on. Without it, "ciliated epithelium"
-          # becomes its own cell_type AND fine_refined stays empty for those cells.
-          labels: [epithelial_ciliated]
-          rollup_all: epithelial_cell
-          # 91 cells; DE almost entirely axonemal (CFAP54/43/299, DNAH12/9/5,
-          # RSPH1, ZBBX), ciliated score 1.289 vs next-best 0.078.
+        # epithelial_ciliated (91 nuclei) was called de novo on this clustering: DE vs
+        # the rest of the lineage is almost entirely axonemal (CFAP54/43/299, DNAH12/9/5,
+        # RSPH1, ZBBX); ciliated score 1.289 vs next-best 0.078.
 
       stromal:
         res: leiden_scVI_3.0
@@ -138,7 +102,6 @@ species:
           prolif:     [MKI67, TOP2A]
           contam:     [CDH1, PECAM1, PTPRC, ACTA2]
         umap_genes: [PDGFRA, PRL, IGFBP1]
-        fine: {}               # no fine labels: the CSV carries cell types directly
 
       immune:
         res: leiden_scVI_3.0
@@ -151,15 +114,6 @@ species:
           mast:   [TPSAB1, CPA3, MS4A2, KIT]
           contam: [CDH1, PDGFRA, PECAM1, ACTA2]
         umap_genes: [PTPRC, CSF1R, CD3E, GZMB]
-        fine:
-          # MUST be a superset of the labels in the committed human_immune.csv.
-          # A label absent here orphans: it becomes its own cell_type AND leaves
-          # fine_refined empty.
-          labels: [t_cell_cd8, t_cell_cd4, t_cell_regulatory,
-                   t_cell_gamma_delta, mast_cell,
-                   unk_cell_gzmb_high_itgax_high,
-                   unk_cell_gzmb_low_itgax_low, macrophage]
-          rollup_all: immune_cell
 
       perivascular:
         res: leiden_scVI_3.0
@@ -169,14 +123,11 @@ species:
           perivascular: [PDGFRB, RGS5, ACTA2]
           contam:       [CDH1, PDGFRA, PTPRC]
         umap_genes: [PECAM1, RGS5]
-        fine:
-          # This lineage contains NO pericytes: RGS5 max 0.11, NOTCH3 max 0.16,
-          # pericyte co-expression 0.04 object-wide. It is two endothelial
-          # populations -- 62% blood (VWF/FLT1/MECOM), 38% lymphatic
-          # (PROX1/RELN/FLT4/PDPN); FLT1 goes 0.88 -> 0.02 across the boundary.
-          # Mouse has NO lymphatic population (Prox1 0.01, Ccl21a 0.002).
-          labels: [endothelial_blood, endothelial_lymph]
-          rollup_all: endothelial_cell
+        # This lineage contains no pericytes (RGS5 max 0.11, NOTCH3 max 0.16, pericyte
+        # co-expression 0.04 object-wide); it is two endothelial populations, 62% blood
+        # (VWF/FLT1/MECOM) and 38% lymphatic (PROX1/RELN/FLT4/PDPN), with FLT1 going
+        # 0.88 -> 0.02 across the boundary. Mouse has no lymphatic population
+        # (Prox1 0.01, Ccl21a 0.002).
       smc:
         res: leiden_scVI_3.0
         coarse: smooth_muscle_cell
@@ -184,7 +135,6 @@ species:
           smc:    [ACTA2, MYH11, TAGLN, DES, CNN1]
           contam: [CDH1, PDGFRA, PECAM1, PTPRC]
         umap_genes: [ACTA2, MYH11]
-        fine: {}
 
 # =============================================================================
 # ATLAS level (stage 04): whole-tissue coarse lineage annotation.

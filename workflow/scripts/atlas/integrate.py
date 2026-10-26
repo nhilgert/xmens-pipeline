@@ -184,10 +184,6 @@ with open(logfile, "w") as log:
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Existing objects under a 'migrated' directory are never overwritten.
-    if out_path.exists() and "migrated" in out_path.parts:
-        raise FileExistsError(f"refusing to overwrite existing object: {out}")
-
     # Write to a temporary name and rename, so a killed job cannot leave a partial h5ad
     # that Snakemake would treat as complete.
     tmp_path = out_path.with_name(f".{out_path.name}.{os.getpid()}.tmp.h5ad")

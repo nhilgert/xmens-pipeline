@@ -25,7 +25,7 @@ def species_samples(w):
 
 # The spine, in stage order. Helper functions defined in these files (lineage_latents,
 # spatial_qc_targets, LINEAGE_RES) are used by rule all and by later rule files.
-for r in ["00a_slidetags","00_cellbender","00b_ingest","01_qc","01c_concat","01b_qc_report","02_integrate","03_cluster",
+for r in ["00a_slidetags","00_cellbender","00b_ingest","01_qc","01c_concat","01b_qc_report","02_integrate",
           "04_annotate","04b_reintegrate","04c_reannotate","98_clustree","04d_merge","04e_reembed","04f_spatial_qc","05_de","06_pseudotime","06b_timepoint_pseudotime","07_spatial_pseudotime",
           "08_cellrank","09_pt_genes_mi","21_scenic",
           "22_crossspecies","23_invitro","90_figures","09_homology","10_samap"]:

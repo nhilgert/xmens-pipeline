@@ -13,7 +13,6 @@ rule merge_reannotated:
         report="results/tables/refined_{species}_guardrail.tsv",
     params:
         species=lambda w: w.species,
-        target_n=lambda w: config.get("published_n", {}).get(w.species, 0),
     log:
         "logs/04d_merge_{species}.log",
     script:

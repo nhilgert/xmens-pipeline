@@ -47,9 +47,9 @@ for cell types); every cluster was then given one label by reading its marker do
 and QC (doublet score, genes per nucleus), and that decision is the committed record:
 `resources/annotations/{species}_{lineage}.csv`, one row per cluster with the markers
 that justify the call in `note`. `workflow/scripts/atlas/apply_annotation.py` applies the
-table; `resources/lineage_spec.yaml` holds the marker panels and the fine-label-to-type
-rollup; `resources/annotation_vocabulary.yaml` is the allowed vocabulary, enforced when
-the release objects are written. `tools/cluster_marker_table.py` recomputes the
+table; `resources/lineage_spec.yaml` holds the resolution and marker panel per lineage;
+`resources/annotation_vocabulary.yaml` is the allowed vocabulary and the subtype-to-type
+map, enforced when the release objects are written. `tools/cluster_marker_table.py` recomputes the
 per-cluster marker detection fractions the notes were written from.
 
 ## Running

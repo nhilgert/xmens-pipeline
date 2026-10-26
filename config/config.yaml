@@ -51,8 +51,7 @@ scvi:
   batch_key: sample
   exclude_mito_ribo: true
 leiden:
-  resolution: 0.1
-  knn: 100
+  knn: 100                   # kNN graph size for the Leiden ladder (integrate.py)
 pseudotime:
   knn: 15
   n_diffmap: 10
@@ -95,9 +94,6 @@ mi:
   n_perm: 1000
   q_thresh: 0.05
   top_percentile: 90
-expected_cells:
-  mouse_postqc: 57242
-  human_postqc: 64553
 lineages:
   mouse:
   - stromal
@@ -113,12 +109,6 @@ lineages:
   - perivascular
   - smc
 repo: /n/lab_storage/eddy_lab/users/nhilgert/xmens_final
-published_n:
-  mouse: 57242
-  human: 64553
-annotate_res:
-  mouse: leiden_scVI_3.0
-  human: leiden_scVI_3.0
 clustree:
   targets:
   - mouse_stromal
@@ -292,12 +282,7 @@ spatial_qc:
   max_at_coord: 1            # >1 cell at an identical coord -> degenerate
   n_mads: 5.0                # far cut: median + n_mads*mad_scale*MAD ... (was 3.0 with mad_scale 1.4826 = 4.45 raw MADs)
   mad_scale: 1.0             # 1.0 = plain MADs; 1.4826 would express n_mads in sigma units
-  log_scale: true            # ... computed on log1p(distance)
   mad_group: timepoint       # far threshold pooled per timepoint
-  action: blank
-  drop_unmapped: false       # coordinate-less cells are KEPT (normal for slide-tags)
-  tp_order:
-    mouse: [uninduced, 1_dpi_early, 1_dpi_late, 2_dpi, 3_dpi, 4_dpi_bleeding]
   # Per-timepoint rigid rotation about each puck centre. All 0 for now.
   rotations:
     mouse:

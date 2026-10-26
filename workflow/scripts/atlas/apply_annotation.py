@@ -14,8 +14,7 @@ from pathlib import Path
 import pandas as pd, numpy as np
 
 __all__ = [
-    "load_choices", "apply_map", "write_atlas", "write_fine", "build_rollup",
-    "build_vocabulary_rollup", "validate_canonical_annotations",
+    "load_choices", "apply_map", "write_atlas", "write_fine", "build_vocabulary_rollup", "validate_canonical_annotations",
 ]
 
 
@@ -37,27 +36,6 @@ def load_choices(csv) -> dict:
             f"{csv}: duplicate cluster keys {sorted(set(cluster[cluster.duplicated(False)]))}"
         )
     return dict(zip(cluster, label))
-
-
-def build_rollup(fine_cfg: dict, coarse: str) -> dict:
-    """fine label -> coarse label, from a spec `fine:` block.
-
-    A lineage with no `labels` has no fine labels: its CSV carries coarse labels and
-    nothing rolls up. Otherwise every listed label maps to `rollup_all`, to the
-    `rollup_prefix` entry it starts with, or to the lineage's coarse label.
-    """
-    out = {}
-    for lab in (fine_cfg or {}).get("labels", []):
-        if "rollup_all" in fine_cfg:
-            out[lab] = fine_cfg["rollup_all"]
-            continue
-        for pref, tgt in fine_cfg.get("rollup_prefix", {}).items():
-            if str(lab).startswith(pref):
-                out[lab] = tgt
-                break
-        else:
-            out[lab] = coarse
-    return out
 
 
 def build_vocabulary_rollup(vocab: dict) -> dict:
@@ -247,12 +225,9 @@ def write_fine(adata, out_h5ad):
     out_h5ad = Path(out_h5ad)
     out_h5ad.parent.mkdir(parents=True, exist_ok=True)
 
-    # Existing objects under a 'migrated' directory are never overwritten.
-    if out_h5ad.exists() and "migrated" in out_h5ad.parts:
-        raise FileExistsError(f"refusing to overwrite staged annotation object: {out_h5ad}")
-
-    # Only the canonical columns leave this step; the notebook scoring columns and
-    # the internal working labels stay behind.
+    # Only the canonical columns leave this step; working columns written by this
+    # script (ref_*, score_*, label, excluded, ...) and label columns left by earlier
+    # annotation rounds in older objects stay behind.
     out = adata[~adata.obs.excluded].copy()
     internal = [
         c for c in out.obs

@@ -30,22 +30,10 @@ vocab = yaml.safe_load(vocab_path.read_text())
 KEEP_OBS = ["sample", "cell_barcode", "timepoint", "cell_type", "cell_subtype"]
 
 
-def canon(series):
-    """Sample names comparable across objects: lower-case alphanumerics, one bleeding term."""
-    series = series.astype(str).str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
-    return series.str.replace("bleeding", "menstrual", regex=False)
-
-
-def key(obs):
-    """sample||barcode, with the 10x lane suffix (-1) stripped from the barcode."""
-    return canon(obs["sample"]) + "||" + obs["cell_barcode"].astype(str).str.replace(
-        r"-\d+$", "", regex=True)
-
-
 def gate_row(check, expected, actual):
     delta = actual - expected
     return {
-        "object": f"refined_{species}_migrated",
+        "object": f"refined_{species}",
         "check": check,
         "expected": int(expected),
         "actual": int(actual),
@@ -208,10 +196,7 @@ os.replace(report_tmp, report)
 print("\n=== count gates ===")
 print(gate_table.to_string(index=False))
 
-# Existing objects under a 'migrated' directory are never overwritten.
 out_h5ad.parent.mkdir(parents=True, exist_ok=True)
-if out_h5ad.exists() and "migrated" in out_h5ad.parts:
-    raise FileExistsError(f"refusing to overwrite existing staged object: {out_h5ad}")
 tmp = out_h5ad.with_name(f".{out_h5ad.name}.{os.getpid()}.tmp.h5ad")
 merged.write_h5ad(tmp)
 os.replace(tmp, out_h5ad)

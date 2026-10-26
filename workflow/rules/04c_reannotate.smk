@@ -6,9 +6,9 @@ import yaml as _yaml
 _SPEC = _yaml.safe_load(open("resources/lineage_spec.yaml"))
 
 def LINEAGE_RES(species, lineage):
-    """Resolution for this lineage, from the spec (falls back to defaults)."""
+    """Resolution for this lineage: its own `res`, else the spec's `defaults.res`."""
     lin = _SPEC["species"][species]["lineages"][lineage]
-    return lin.get("res", _SPEC.get("defaults", {}).get("res", "leiden_scVI_2.0"))
+    return lin.get("res", _SPEC["defaults"]["res"])
 
 
 # Per-lineage object with the committed subtype labels; the input of 04d_merge.

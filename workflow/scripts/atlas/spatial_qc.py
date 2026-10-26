@@ -12,7 +12,8 @@ Follows notebooks/01b_spatial_qc_mouse.ipynb. Only coordinates drive the decisio
 object but are never an input. A cell whose coordinate fails is set to NaN, so
 expression, annotation and every cell count are untouched. Stages run in the order
 unmapped, degenerate, far, boxed, blank, sections, rotate, each reported to the log.
-All parameters come from config['spatial_qc'].
+Thresholds come from config['spatial_qc']; the distance is always taken on the log scale,
+blanking (not dropping) is the only action, and coordinate-less nuclei are always kept.
 """
 import json
 import numpy as np
@@ -53,7 +54,6 @@ if MAD_GROUP in ("timepoint", "TIMEPOINT"):
     MAD_GROUP = TIMEPOINT
 elif MAD_GROUP in ("sample", "SAMPLE"):
     MAD_GROUP = SAMPLE
-TP_ORDER = P.get("tp_order", {}).get(SPECIES, [])
 EXCL = P.get("exclusions", {}).get(SPECIES, []) or []
 ROT = P.get("rotations", {}).get(SPECIES, {}) or {}
 SECT = P.get("sections", {}).get(SPECIES, []) or []  # line splits for multi-section pucks
@@ -108,7 +108,7 @@ say(f"degenerate {int(degen.sum()):,}  "
 # Stage: far ----
 
 # Distances are recomputed on the degenerate survivors, per mad_group. The cut is
-# median + n_mads * mad_scale * MAD of log1p(distance), mapped back to µm (config: log_scale).
+# median + n_mads * mad_scale * MAD of log1p(distance), mapped back to µm.
 surv = mapped & ~degen
 score = pd.Series(np.nan, index=obs.index)
 thr = {}
