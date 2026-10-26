@@ -41,11 +41,16 @@ reads only that release.
 
 ## How annotation works
 
-No label is computed inside the pipeline. Each annotation step looks up a committed
-table in `resources/annotations/` (one row per Leiden cluster: cluster, label,
-cell count, resolution, curator note) with `workflow/scripts/atlas/apply_annotation.py`.
-The tables came from marker review of deliberately over-clustered data, with the
-marker panels recorded in `resources/lineage_spec.yaml`.
+No label is computed inside the pipeline. Clustering is unsupervised (scVI latent,
+Leiden at resolution 2.5 on the atlas for major cell classes, 3.0 within each lineage
+for cell types); every cluster was then given one label by reading its marker dot plot
+and QC (doublet score, genes per nucleus), and that decision is the committed record:
+`resources/annotations/{species}_{lineage}.csv`, one row per cluster with the markers
+that justify the call in `note`. `workflow/scripts/atlas/apply_annotation.py` applies the
+table; `resources/lineage_spec.yaml` holds the marker panels and the fine-label-to-type
+rollup; `resources/annotation_vocabulary.yaml` is the allowed vocabulary, enforced when
+the release objects are written. `tools/cluster_marker_table.py` recomputes the
+per-cluster marker detection fractions the notes were written from.
 
 ## Running
 

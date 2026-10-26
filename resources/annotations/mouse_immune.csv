@@ -1,30 +1,30 @@
-cluster,label
-0,macrophage
-1,macrophage
-2,macrophage
-3,macrophage
-4,unk_cell_proliferative
-5,dendritic_cell
-6,t_cell_gamma_delta
-7,monocyte
-8,macrophage
-9,unk_cell_cytotoxic
-10,unk_cell
-11,t_cell
-12,unk_cell
-13,monocyte
-14,macrophage
-15,unk_cell
-16,macrophage
-17,macrophage
-18,unk_cell
-19,monocyte
-20,unk_cell
-21,monocyte
-22,macrophage
-23,macrophage
-24,macrophage
-25,unk_cell
-26,macrophage_proliferative
-27,b_cell
-28,monocyte
+cluster,label,n_cells,res,note
+0,macrophage,84,leiden_scVI_3.0,"Adgre1 0.51; C1qa 0.17; Mrc1 0.65; Csf1r 0.45 | top vs lineage: Pbx1 0.57, Zeb2 0.93, Tshz2 0.51"
+1,macrophage,83,leiden_scVI_3.0,"Adgre1 0.70; C1qa 0.23; Mrc1 0.75; Csf1r 0.66 | top vs lineage: Tmcc3 0.92, Plxdc2 0.70, Gab2 0.92"
+2,macrophage,26,leiden_scVI_3.0,"Adgre1 0.50; C1qa 0.19; Mrc1 0.62; Csf1r 0.42 | top vs lineage: Magi1 0.73, Tcf4 0.96, Ptprm 0.77"
+3,macrophage,93,leiden_scVI_3.0,"Adgre1 0.55; C1qa 0.23; Mrc1 0.96; Csf1r 0.52 | top vs lineage: F13a1 0.84, Frmd4b 0.95, Wwp1 0.89"
+4,unk_cell_proliferative,154,leiden_scVI_3.0,"Ncr1 0.47; Eomes 0.23; Mki67 0.57; Top2a 0.58 | top vs lineage: Arsb 0.85, Skap1 0.90, Atp8b4 0.84"
+5,dendritic_cell,90,leiden_scVI_3.0,"Flt3 0.72; Xcr1 0.26; H2-Ab1 0.44; Itgax 0.10 | top vs lineage: Wdfy4 0.99, Fnbp1 0.97, Camk1d 0.97"
+6,t_cell_gamma_delta,55,leiden_scVI_3.0,"Trdc 0.11; Cd3e 0.11; Cd3d 0.00 | top vs lineage: St6galnac3 0.93, Camk4 0.73, Bcl11b 0.69"
+7,monocyte,96,leiden_scVI_3.0,"Ly6c2 0.00; Ccr2 0.45; Plac8 0.01; Csf1r 0.12 | top vs lineage: Alcam 0.91, Trerf1 0.85, Ext1 0.93"
+8,macrophage,82,leiden_scVI_3.0,"Adgre1 0.60; C1qa 0.26; Mrc1 0.76; Csf1r 0.39 | top vs lineage: Sash1 0.82, Fnip2 0.73, Psap 0.73"
+9,unk_cell_cytotoxic,73,leiden_scVI_3.0,"Gzmb 0.53; Gzmc 0.58; Prf1 0.55; Itgax 0.04 | top vs lineage: Myo10 0.89, Runx3 0.96, Tnfrsf9 0.85"
+10,unk_cell,131,leiden_scVI_3.0,"Ncr1 0.55; Eomes 0.13; Itga1 0.79; Gzmb 0.21 | top vs lineage: Inpp4b 0.92, Bcl2 0.95, Styk1 0.79"
+11,t_cell,97,leiden_scVI_3.0,"Cd3e 0.19; Cd3d 0.00; Cd4 0.10; Cd8a 0.11 | top vs lineage: Skap1 0.96, Arhgap15 0.99, Themis 0.67"
+12,unk_cell,124,leiden_scVI_3.0,"Ncr1 0.43; Eomes 0.17; Itga1 0.48; Gzmb 0.01 | top vs lineage: Skap1 0.87, Samd3 0.71, Ptprc 0.95"
+13,monocyte,13,leiden_scVI_3.0,"Ly6c2 0.00; Ccr2 0.15; Plac8 0.23; Csf1r 0.00 | top vs lineage: Bcl11a 0.92, Mctp2 0.92, Runx2 0.92"
+14,macrophage,79,leiden_scVI_3.0,"Adgre1 0.59; C1qa 0.14; Mrc1 0.81; Csf1r 0.53 | top vs lineage: Zdhhc14 0.82, Tmcc3 0.84, Pde7b 0.81"
+15,unk_cell,60,leiden_scVI_3.0,"Ncr1 0.60; Eomes 0.25; Itga1 0.55; Gzmb 0.12 | top vs lineage: Styk1 0.90, Bcl2 0.98, Tox 0.95"
+16,macrophage,89,leiden_scVI_3.0,"Adgre1 0.54; C1qa 0.18; Mrc1 0.93; Csf1r 0.43 | top vs lineage: Dab2 0.89, F13a1 0.83, Stab1 0.81"
+17,macrophage,85,leiden_scVI_3.0,"Adgre1 0.54; C1qa 0.24; Mrc1 0.88; Csf1r 0.49 | top vs lineage: Rbpj 0.95, F13a1 0.86, Frmd4b 0.85"
+18,unk_cell,53,leiden_scVI_3.0,"Ncr1 0.55; Eomes 0.21; Itga1 0.85; Gzmb 0.06 | top vs lineage: Runx3 0.87, Clnk 0.87, Ppp3cc 0.85"
+19,monocyte,14,leiden_scVI_3.0,"Ly6c2 0.00; Ccr2 0.00; Plac8 0.00; Csf1r 0.14 | top vs lineage: Rabgap1l 1.00, Tbc1d4 1.00, Tmcc3 1.00"
+20,unk_cell,30,leiden_scVI_3.0,"Ncr1 0.50; Eomes 0.13; Itga1 0.47; Gzmb 0.23 | top vs lineage: Bcl2 0.97, Tshz2 0.67, Ppp3cc 0.87"
+21,monocyte,56,leiden_scVI_3.0,"Ly6c2 0.02; Ccr2 0.52; Plac8 0.11; Csf1r 0.36 | top vs lineage: Lyn 0.93, Fgr 0.70, Arhgap26 0.73"
+22,macrophage,30,leiden_scVI_3.0,"Adgre1 0.80; C1qa 0.13; Mrc1 0.90; Csf1r 0.47 | top vs lineage: Ophn1 0.90, Tmcc3 0.87, Frmd4b 0.90"
+23,macrophage,99,leiden_scVI_3.0,"Adgre1 0.40; C1qa 0.13; Mrc1 0.54; Csf1r 0.42 | top vs lineage: Zeb2 0.93, Dock4 0.68, Dab2 0.77"
+24,macrophage,47,leiden_scVI_3.0,"Adgre1 0.51; C1qa 0.15; Mrc1 0.70; Csf1r 0.57 | top vs lineage: Tmcc3 0.79, Ctsc 0.66, Adap2os 0.60"
+25,unk_cell,38,leiden_scVI_3.0,"Ncr1 0.63; Eomes 0.18; Itga1 0.13; Gzmb 0.05 | top vs lineage: Fyn 0.92, Ptprc 0.97, Chsy1 0.76"
+26,macrophage_proliferative,150,leiden_scVI_3.0,"Adgre1 0.48; C1qa 0.23; Mki67 0.53; Top2a 0.51 | top vs lineage: Itsn1 0.78, Diaph3 0.64, Dab2 0.80"
+27,b_cell,35,leiden_scVI_3.0,"Cd79a 0.11; Ms4a1 0.17; Cd19 0.11 | top vs lineage: Bank1 0.97, Ebf1 0.94, Foxp1 1.00"
+28,monocyte,25,leiden_scVI_3.0,"Ly6c2 0.00; Ccr2 0.00; Plac8 0.04; Csf1r 0.04 | top vs lineage: Csf3r 0.96, Tpd52 0.96, Slfn4 0.80"

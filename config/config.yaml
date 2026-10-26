@@ -113,9 +113,6 @@ lineages:
   - perivascular
   - smc
 repo: /n/lab_storage/eddy_lab/users/nhilgert/xmens_final
-annotation_references:
-  mouse: /n/lab_storage/eddy_lab/users/nhilgert/decidualization/revisions/adatas/submission/20251008_Cevrim_XMens_All_Cells.h5ad
-  human: /n/lab_storage/eddy_lab/users/nhilgert/decidualization/revisions/adatas/submission/20251008_Cevrim_Human_All_Cells.h5ad
 published_n:
   mouse: 57242
   human: 64553

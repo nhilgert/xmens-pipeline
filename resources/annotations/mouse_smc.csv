@@ -1,28 +1,28 @@
-cluster,label
-0,smooth_muscle_cell
-1,smooth_muscle_cell
-2,smooth_muscle_cell
-3,smooth_muscle_cell
-4,EXCLUDE
-5,EXCLUDE
-6,smooth_muscle_cell
-7,smooth_muscle_cell
-8,smooth_muscle_cell
-9,smooth_muscle_cell
-10,smooth_muscle_cell
-11,EXCLUDE
-12,smooth_muscle_cell
-13,smooth_muscle_cell
-14,smooth_muscle_cell
-15,smooth_muscle_cell
-16,smooth_muscle_cell
-17,smooth_muscle_cell
-18,smooth_muscle_cell
-19,smooth_muscle_cell
-20,smooth_muscle_cell
-21,smooth_muscle_cell
-22,smooth_muscle_cell
-23,smooth_muscle_cell
-24,smooth_muscle_cell
-25,EXCLUDE
-26,smooth_muscle_cell
+cluster,label,n_cells,res,note
+0,smooth_muscle_cell,48,leiden_scVI_3.0,"Acta2 0.65; Myh11 0.88; Tagln 0.33; Des 0.37 | top vs lineage: Arhgap6 0.94, Fhl1 0.71, Prune2 0.88"
+1,smooth_muscle_cell,90,leiden_scVI_3.0,"Acta2 0.61; Myh11 0.90; Tagln 0.29; Des 0.37 | top vs lineage: Auts2 0.97, Syndig1 0.87, Adgrl3 0.80"
+2,smooth_muscle_cell,66,leiden_scVI_3.0,"Acta2 0.83; Myh11 0.95; Tagln 0.52; Des 0.65 | top vs lineage: Samd4 0.95, Slc8a1 0.94, Prune2 0.97"
+3,smooth_muscle_cell,62,leiden_scVI_3.0,"Acta2 0.73; Myh11 0.90; Tagln 0.27; Des 0.27 | top vs lineage: Frmd4b 0.87, Crybg3 0.74, Cacna2d1 0.89"
+4,EXCLUDE,123,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 0.12 (lineage q75 0.43), genes med 997 (lineage q25 682), co-expression 0.02"
+5,EXCLUDE,67,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 2.56 (lineage q75 0.43), genes med 1511 (lineage q25 682), co-expression 0.01"
+6,smooth_muscle_cell,94,leiden_scVI_3.0,"Acta2 0.71; Myh11 0.99; Tagln 0.53; Des 0.35 | top vs lineage: Adgrl3 0.84, Prkg1 0.99, Cacnb2 0.97"
+7,smooth_muscle_cell,40,leiden_scVI_3.0,"Acta2 0.58; Myh11 0.93; Tagln 0.22; Des 0.20 | top vs lineage: Sema3a 0.75, Astn2 0.62, Zfpm2 0.78"
+8,smooth_muscle_cell,58,leiden_scVI_3.0,"Acta2 0.88; Myh11 0.95; Tagln 0.57; Des 0.40 | top vs lineage: Chrm3 0.55, Schip1 0.84, Dpp6 0.86"
+9,smooth_muscle_cell,45,leiden_scVI_3.0,"Acta2 0.78; Myh11 0.93; Tagln 0.38; Des 0.36 | top vs lineage: Arhgap6 0.89, Fstl4 0.64, Dpyd 0.78"
+10,smooth_muscle_cell,141,leiden_scVI_3.0,"Acta2 0.59; Myh11 0.83; Tagln 0.21; Des 0.11 | top vs lineage: Trhde 0.84, Crybg3 0.79, Cacna1d 0.75"
+11,EXCLUDE,63,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 1.96 (lineage q75 0.43), genes med 1508 (lineage q25 682), co-expression 0.11"
+12,smooth_muscle_cell,78,leiden_scVI_3.0,"Acta2 0.67; Myh11 0.95; Tagln 0.35; Des 0.44 | top vs lineage: Diaph3 0.79, Anln 0.63, Top2a 0.62"
+13,smooth_muscle_cell,85,leiden_scVI_3.0,"Acta2 0.66; Myh11 0.91; Tagln 0.34; Des 0.40 | top vs lineage: Cfh 0.72, Zfpm2 0.87, Grm8 0.59"
+14,smooth_muscle_cell,89,leiden_scVI_3.0,"Acta2 0.54; Myh11 0.91; Tagln 0.31; Des 0.25 | top vs lineage: Camk1d 0.89, Meis2 0.98, Frmd4b 0.85"
+15,smooth_muscle_cell,85,leiden_scVI_3.0,"Acta2 0.62; Myh11 0.95; Tagln 0.51; Des 0.31 | top vs lineage: Actg2 0.85, Plcl2 0.73, Itih5 0.67"
+16,smooth_muscle_cell,86,leiden_scVI_3.0,"Acta2 0.64; Myh11 0.93; Tagln 0.55; Des 0.50 | top vs lineage: Actg2 0.92, Kcnma1 0.90, Sorbs1 0.94"
+17,smooth_muscle_cell,32,leiden_scVI_3.0,"Acta2 0.59; Myh11 0.91; Tagln 0.25; Des 0.28 | top vs lineage: Slc24a3 1.00, Dmd 1.00, Cacnb2 0.94"
+18,smooth_muscle_cell,44,leiden_scVI_3.0,"Acta2 0.57; Myh11 0.84; Tagln 0.23; Des 0.39 | top vs lineage: Rock2 0.77, Zfp804b 0.34, Myo5c 0.34"
+19,smooth_muscle_cell,61,leiden_scVI_3.0,"Acta2 0.56; Myh11 0.87; Tagln 0.25; Des 0.21 | top vs lineage: Cacnb2 0.97, Slc24a3 0.97, Syndig1 0.75"
+20,smooth_muscle_cell,69,leiden_scVI_3.0,"Acta2 0.84; Myh11 1.00; Tagln 0.71; Des 0.67 | top vs lineage: Enah 0.94, Tnc 0.81, Fn1 0.93"
+21,smooth_muscle_cell,37,leiden_scVI_3.0,"Acta2 0.62; Myh11 0.86; Tagln 0.38; Des 0.43 | top vs lineage: Zfpm2 0.84, Slc8a1 0.97, Dpp6 0.73"
+22,smooth_muscle_cell,34,leiden_scVI_3.0,"Acta2 0.59; Myh11 0.79; Tagln 0.26; Des 0.24 | top vs lineage: Cacna1c 1.00, Creb5 0.68, Rspo3 0.76"
+23,smooth_muscle_cell,36,leiden_scVI_3.0,"Acta2 0.47; Myh11 0.97; Tagln 0.42; Des 0.33 | top vs lineage: Fn1 0.78, Slc8a1 0.94, Dpp6 0.75"
+24,smooth_muscle_cell,60,leiden_scVI_3.0,"Acta2 0.70; Myh11 0.95; Tagln 0.50; Des 0.53 | top vs lineage: Atp8a1 0.75, St6galnac3 0.78, Kcnma1 0.83"
+25,EXCLUDE,73,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 1.54 (lineage q75 0.43), genes med 2066 (lineage q25 682), co-expression 0.16"
+26,smooth_muscle_cell,3,leiden_scVI_3.0,"Acta2 0.00; Myh11 0.67; Tagln 0.67; Des 0.33 | top vs lineage: Syne1 1.00, Plxna4 1.00, Adcy2 1.00"

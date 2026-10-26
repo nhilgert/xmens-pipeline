@@ -23,7 +23,6 @@ parts_in = list(sm.input.parts)
 out_h5ad = Path(sm.output.h5ad)
 report = Path(sm.output.report)
 species = sm.params.species
-ref_path = str(sm.params.ref or "")
 vocab_path = Path(getattr(sm.input, "vocab", None)
                   or getattr(sm.params, "vocab", "resources/annotation_vocabulary.yaml"))
 vocab = yaml.safe_load(vocab_path.read_text())
@@ -196,33 +195,6 @@ else:
                  int(((types == "perimetrial_cell") &
                       (subtypes == "perimetrial_cell")).sum())),
     ])
-
-# Agreement with the legacy reference annotation ----
-
-# Agreement is partial by design: the legacy human "perivascular cells" label is
-# content-ambiguous, so reference labels without an import mapping are excluded.
-if ref_path and Path(ref_path).exists():
-    them = sc.read_h5ad(ref_path, backed="r").obs.copy()
-    them["k"] = key(them)
-    ref_raw = key(merged.obs).map(them.set_index("k")["cell_type_annotations"])
-    type_map = vocab["import_mapping"][species]["cell_type"]
-    ref_canonical = ref_raw.map(type_map)
-    comparable = ref_canonical.notna().values
-    agreement = ((merged.obs.cell_type.astype(str).values[comparable] ==
-                  ref_canonical.astype(str).values[comparable]).mean()
-                 if comparable.sum() else np.nan)
-    rows.append({
-        "object": f"refined_{species}_migrated",
-        "check": "legacy_reference_comparable_agreement_pct",
-        "expected": np.nan,
-        "actual": round(100 * agreement, 4) if comparable.sum() else np.nan,
-        "delta": np.nan,
-        "status": "INFO",
-    })
-    print(f"legacy reference comparable rows: {int(comparable.sum()):,}; "
-          f"agreement={100 * agreement:.2f}%")
-else:
-    print(f"note: reference object not found: {ref_path}")
 
 # Write the gate table and the merged object ----
 

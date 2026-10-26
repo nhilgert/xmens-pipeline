@@ -1,22 +1,22 @@
 cluster,label,n_cells,res,note
-0,endothelial_blood,124,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-1,endothelial_blood,94,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-2,EXCLUDE,53,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
-3,EXCLUDE,110,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
-4,EXCLUDE,76,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
-5,EXCLUDE,105,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
-6,endothelial_lymph,85,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
-7,endothelial_lymph,125,leiden_scVI_3.0,"LEC: PROX1 0.90 RELN 0.98. NB doublet score ~9.15 -- KEPT anyway. LECs are large and RNA-rich so the continuous score is inflated; exclusion is marker-based (handoff §5), same as mouse cluster 19."
-8,endothelial_lymph,74,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
-9,endothelial_blood,70,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-10,endothelial_blood,80,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-11,endothelial_blood,44,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-12,endothelial_lymph,58,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
-13,EXCLUDE,91,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
-14,endothelial_blood,79,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-15,endothelial_lymph,62,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
-16,endothelial_lymph,102,leiden_scVI_3.0,"LEC: PROX1/RELN/FLT4/PDPN+, FLT1-negative"
-17,endothelial_blood,111,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-18,endothelial_blood,122,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-19,endothelial_blood,104,leiden_scVI_3.0,"BEC: VWF/FLT1/MECOM+, PROX1/RELN-negative"
-20,EXCLUDE,44,leiden_scVI_3.0,mixed: PDGFRA/DCN/LUM co-expressed -> fibroblast contamination
+0,endothelial_blood,124,leiden_scVI_3.0,"PECAM1 0.88; FLT1 0.88; VWF 0.94; PROX1 0.12 | top vs lineage: INSR 0.94, AFF3 0.90, PKP4 0.94"
+1,endothelial_blood,94,leiden_scVI_3.0,"PECAM1 0.93; FLT1 0.78; VWF 0.97; PROX1 0.03 | top vs lineage: AFF3 0.95, PCDH17 0.87, SLCO2A1 0.97"
+2,EXCLUDE,53,leiden_scVI_3.0,"EXCLUDE: fibroblast markers co-expressed; doublet med 10.50 (lineage q75 9.09), genes med 4529 (lineage q25 1278), co-expression 0.28"
+3,EXCLUDE,110,leiden_scVI_3.0,"EXCLUDE: fibroblast markers co-expressed; doublet med 9.15 (lineage q75 9.09), genes med 3848 (lineage q25 1278), co-expression 0.21"
+4,EXCLUDE,76,leiden_scVI_3.0,"EXCLUDE: fibroblast markers co-expressed; doublet med 11.59 (lineage q75 9.09), genes med 3670 (lineage q25 1278), co-expression 0.32"
+5,EXCLUDE,105,leiden_scVI_3.0,"EXCLUDE: fibroblast markers co-expressed; doublet med 0.01 (lineage q75 9.09), genes med 1786 (lineage q25 1278), co-expression 0.14"
+6,endothelial_lymph,85,leiden_scVI_3.0,"PROX1 0.91; LYVE1 0.07; CCL21 0.69; FLT1 0.02 | top vs lineage: PPFIBP1 0.99, SEMA3D 0.93, TFPI 1.00"
+7,endothelial_lymph,125,leiden_scVI_3.0,"PROX1 0.90; LYVE1 0.05; CCL21 0.29; FLT1 0.05 | top vs lineage: RELN 0.98, PIEZO2 0.90, CHSY3 0.95"
+8,endothelial_lymph,74,leiden_scVI_3.0,"PROX1 0.93; LYVE1 0.19; CCL21 0.59; FLT1 0.03 | top vs lineage: CD36 0.96, PPFIBP1 0.97, PKHD1L1 0.91"
+9,endothelial_blood,70,leiden_scVI_3.0,"PECAM1 0.90; FLT1 0.79; VWF 0.97; PROX1 0.04 | top vs lineage: EPB41L3 0.96, ENG 0.96, SAMD12 0.86"
+10,endothelial_blood,80,leiden_scVI_3.0,"PECAM1 0.91; FLT1 0.76; VWF 0.92; PROX1 0.00 | top vs lineage: SPARCL1 1.00, B2M 0.97, TMSB4X 0.95"
+11,endothelial_blood,44,leiden_scVI_3.0,"PECAM1 0.75; FLT1 0.84; VWF 0.93; PROX1 0.05 | top vs lineage: SERPINE1 0.93, COL4A1 0.95, RAI14 0.93"
+12,endothelial_lymph,58,leiden_scVI_3.0,"PROX1 0.76; LYVE1 0.26; CCL21 0.79; FLT1 0.03 | top vs lineage: MAF 0.91, PPFIBP1 0.95, PKHD1L1 0.79"
+13,EXCLUDE,91,leiden_scVI_3.0,"EXCLUDE: fibroblast markers co-expressed; doublet med 9.15 (lineage q75 9.09), genes med 3572 (lineage q25 1278), co-expression 0.18"
+14,endothelial_blood,79,leiden_scVI_3.0,"PECAM1 0.92; FLT1 0.59; VWF 0.47; PROX1 0.05 | top vs lineage: ARL15 0.96, TIMP3 0.97, TMTC1 0.90"
+15,endothelial_lymph,62,leiden_scVI_3.0,"PROX1 0.84; LYVE1 0.06; CCL21 0.58; FLT1 0.02 | top vs lineage: SMAD1 0.97, DOCK5 0.95, TBX1 0.81"
+16,endothelial_lymph,102,leiden_scVI_3.0,"PROX1 0.77; LYVE1 0.03; CCL21 0.22; FLT1 0.04 | top vs lineage: LAMA4 0.90, ETS1 0.87, SGIP1 0.87"
+17,endothelial_blood,111,leiden_scVI_3.0,"PECAM1 0.71; FLT1 0.67; VWF 0.71; PROX1 0.04 | top vs lineage: LIFR 0.97, ARL15 0.96, ABCB1 0.82"
+18,endothelial_blood,122,leiden_scVI_3.0,"PECAM1 0.76; FLT1 0.75; VWF 0.89; PROX1 0.01 | top vs lineage: LIFR 0.99, MRTFB 0.98, RYR3 0.81"
+19,endothelial_blood,104,leiden_scVI_3.0,"PECAM1 0.81; FLT1 0.71; VWF 0.87; PROX1 0.01 | top vs lineage: RYR3 0.80, SLCO2A1 0.90, SMAD6 0.74"
+20,EXCLUDE,44,leiden_scVI_3.0,"EXCLUDE: fibroblast markers co-expressed; doublet med 0.00 (lineage q75 9.09), genes med 1396 (lineage q25 1278), co-expression 0.14"

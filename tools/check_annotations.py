@@ -19,12 +19,6 @@ import pandas as pd
 import yaml
 
 
-# Columns from earlier annotation schemas that must be gone from a stamped object.
-LEGACY_OBS = {
-    "coarse_refined", "fine_refined", "subtype", "annotation_level",
-    "cell_type_annotations", "cell_subtype_annotations", "cell_type_subannotations",
-}
-
 # The fibroblast/decidual object holds exactly these two cell types; its size is
 # decidual_cell + endometrial_fibroblast from expected_coarse_counts in
 # resources/annotation_vocabulary.yaml.
@@ -143,9 +137,6 @@ def validate_h5ad(path: Path, species: str, role: str, vocab: dict):
     for col in ("cell_type", "cell_subtype"):
         if col not in obs:
             failures.append(f"missing required obs column {col}")
-    present_legacy = sorted(LEGACY_OBS & set(obs.columns))
-    if present_legacy:
-        failures.append(f"legacy annotation columns remain: {present_legacy}")
     if failures:
         return obj, failures, gates
 

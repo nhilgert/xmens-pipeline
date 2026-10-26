@@ -1,19 +1,16 @@
 # resources/lineage_spec.yaml
-# Single source of truth for the per-lineage annotation pass.
-# Edit here, then re-run tools/gen_04c_notebooks.py to (re)generate scaffolding.
+# Per-lineage annotation settings: the clustering resolution each lineage is annotated
+# at, the marker panel the clusters were read against, and the fine labels a lineage may
+# carry. Labels themselves live in resources/annotations/{species}_{lineage}.csv, one
+# row per cluster, each decided from the cluster's marker dot plot and QC. Nothing here
+# assigns a label; apply_annotation.py reads `fine.labels` and `rollup_*` only to map
+# each fine label to its coarse cell type.
 #
-# fine.mode:
-#   none    - coarse only; every kept cluster gets `coarse`
-#   markers - assign a fine label per cluster by argmax over `fine.from_groups`
-#             (each value names a group in `markers`)
-#   csv     - transfer a fine label by majority vote from a barcode->label CSV
+# fine.labels   - the fine labels allowed in this lineage's CSV
+# rollup_all    - every fine label rolls up to this coarse label
+# rollup_prefix - fine label prefix -> coarse label
 
 defaults:
-  # deposited fine type -> our lineage vocabulary (used for the VOTE only; the
-  # agreement check still compares against the raw deposited labels)
-  collapse:
-    endometrial fibroblasts: stromal
-    decidual cells: stromal
   res: leiden_scVI_3.0
   auto_exclude:
     doublet_score: 999      # disabled -- exclusions are marker-based, by hand
@@ -24,7 +21,6 @@ defaults:
 species:
 
   mouse:
-    ref: 20251008_Cevrim_XMens_All_Cells.h5ad
     lineages:
 
       epithelial:
@@ -40,9 +36,7 @@ species:
         # (see notes there and annotation_vocabulary.yaml content_tasks.mouse_epithelial_split).
         # Lgr5, Muc1, Ihh and Lif above did not separate the two; the calls use Wnt7a
         # (luminal) and Foxa2/Prss28/Prss29 (glandular) plus spatial neighbourhood.
-        # mode: none -- the split was made de novo on this clustering, not transferred.
         fine:
-          mode: none
           labels: [epithelial_luminal, epithelial_glandular]
           rollup_all: epithelial_cell
           # note: Sox6 is in `contam` on purpose -- broadly expressed, so a Sox6-high
@@ -56,10 +50,10 @@ species:
           epi:    [Cdh1, Pax8]
           contam: [Pdgfra, Prl8a2, Acta2, Myh11, Flt1, Pecam1, Ptprc]
         umap_genes: [Sox6, Msln, Upk3b, Wt1]
-        fine: {mode: none}
+        fine: {}
 
       stromal:
-        res: leiden_scVI_3.0        # all 9 published subtypes recover here (84% subtype / 99.99% lineage agreement vs deposited)
+        res: leiden_scVI_3.0
         coarse: stromal
         markers:
           fibroblast: [Pdgfra, Col1a1, Col3a1, Dcn, Lum]
@@ -68,13 +62,6 @@ species:
           contam:     [Cdh1, Pax8, Pecam1, Ptprc, Myh11, Sox6]
         umap_genes: [Pdgfra, Prl8a2, Bmp2, Mki67]
         fine:
-          mode: h5ad
-          # DO NOT use fib_metadata.csv: the copy on disk is 15,972 of 43,052 rows
-          # and joins at 36% SILENTLY (missing barcodes -> NaN -> "unlabeled",
-          # indistinguishable from a real absence), which invalidates every subtype
-          # vote. See HANDOFF_mouse_stromal.md section 3.
-          h5ad: 20251008_Cevrim_XMens_Only_Fib_Dec_Cells.h5ad   # REPO_SUB, 97.1% join
-          col: cell_subtype_annotations
           labels: [decidual_boundary, decidual_proliferative, decidual_mature,
                    decidual_apoptotic, efib_outer, efib_middle,
                    efib_middle_induced, efib_subluminal, efib_proliferative]
@@ -94,9 +81,6 @@ species:
           contam: [Cdh1, Pdgfra, Pecam1, Myh11, Sox6]
         umap_genes: [Ptprc, Csf1r, Cd3e, Gzmb]
         fine:
-          mode: csv
-          csv: mouse_immune_fine.csv      # Alan Y. Baez Vazquez -- export pending
-          col: Annotation_1.3
           labels: [macrophage, macrophage_proliferative, monocyte, dendritic_cell,
                    b_cell, t_cell, t_cell_gamma_delta,
                    unk_cell_cytotoxic, unk_cell,
@@ -113,7 +97,6 @@ species:
         umap_genes: [Pecam1, Flt1, Rgs5]
         # Content task: every retained mouse vascular cell is blood endothelial.
         fine:
-          mode: none
           labels: [endothelial_blood]
           rollup_all: endothelial_cell
 
@@ -124,10 +107,9 @@ species:
           smc:    [Acta2, Myh11, Tagln, Des, Cnn1]
           contam: [Cdh1, Pdgfra, Pecam1, Ptprc, Sox6]
         umap_genes: [Acta2, Myh11, Tagln]
-        fine: {mode: none}
+        fine: {}
 
   human:
-    ref: 20251008_Cevrim_Human_All_Cells.h5ad
     lineages:
 
       epithelial:
@@ -142,13 +124,10 @@ species:
         fine:
           # `labels` is what build_rollup keys on. Without it, "ciliated epithelium"
           # becomes its own cell_type AND fine_refined stays empty for those cells.
-          # mode: none is correct -- ciliated was found de novo, not transferred.
-          mode: none
           labels: [epithelial_ciliated]
           rollup_all: epithelial_cell
           # 91 cells; DE almost entirely axonemal (CFAP54/43/299, DNAH12/9/5,
-          # RSPH1, ZBBX), ciliated score 1.289 vs next-best 0.078. The deposited
-          # annotation lumps these into "epithelial cells" -- documented deviation.
+          # RSPH1, ZBBX), ciliated score 1.289 vs next-best 0.078.
 
       stromal:
         res: leiden_scVI_3.0
@@ -159,7 +138,7 @@ species:
           prolif:     [MKI67, TOP2A]
           contam:     [CDH1, PECAM1, PTPRC, ACTA2]
         umap_genes: [PDGFRA, PRL, IGFBP1]
-        fine: {mode: none}     # human fib/dec object carries no subtypes
+        fine: {}               # no fine labels: the CSV carries cell types directly
 
       immune:
         res: leiden_scVI_3.0
@@ -173,14 +152,9 @@ species:
           contam: [CDH1, PDGFRA, PECAM1, ACTA2]
         umap_genes: [PTPRC, CSF1R, CD3E, GZMB]
         fine:
-          mode: csv
-          csv: human_immune_fine.csv      # Alan Y. Baez Vazquez -- export pending
-          col: Annotation_1.3
           # MUST be a superset of the labels in the committed human_immune.csv.
           # A label absent here orphans: it becomes its own cell_type AND leaves
-          # fine_refined empty. The committed CSV writes "ITGAX hi" without the
-          # trailing period, and one "Macrophages" rather than the
-          # Menstruation/Secretory split -- both spellings kept so either works.
+          # fine_refined empty.
           labels: [t_cell_cd8, t_cell_cd4, t_cell_regulatory,
                    t_cell_gamma_delta, mast_cell,
                    unk_cell_gzmb_high_itgax_high,
@@ -201,7 +175,6 @@ species:
           # populations -- 62% blood (VWF/FLT1/MECOM), 38% lymphatic
           # (PROX1/RELN/FLT4/PDPN); FLT1 goes 0.88 -> 0.02 across the boundary.
           # Mouse has NO lymphatic population (Prox1 0.01, Ccl21a 0.002).
-          mode: none
           labels: [endothelial_blood, endothelial_lymph]
           rollup_all: endothelial_cell
       smc:
@@ -211,7 +184,7 @@ species:
           smc:    [ACTA2, MYH11, TAGLN, DES, CNN1]
           contam: [CDH1, PDGFRA, PECAM1, PTPRC]
         umap_genes: [ACTA2, MYH11]
-        fine: {mode: none}
+        fine: {}
 
 # =============================================================================
 # ATLAS level (stage 04): whole-tissue coarse lineage annotation.
@@ -222,13 +195,7 @@ atlas:
 
   mouse:
     res: leiden_scVI_2.5          # published ladder; nothing is re-clustered here
-    ref: 20251008_Cevrim_XMens_All_Cells.h5ad
     panel: panel_mouse.tsv        # resources/markers/
-    # deposited fine type -> our lineage. Fibroblast and decidual are one
-    # continuum; the split happens at 04c after reintegration.
-    collapse:
-      endometrial fibroblasts: stromal
-      decidual cells: stromal
     labels:                       # internal lineage routing value -> output slug
       stromal: stromal
       epithelial: epithelial
@@ -239,11 +206,7 @@ atlas:
 
   human:
     res: leiden_scVI_2.5
-    ref: 20251008_Cevrim_Human_All_Cells.h5ad
     panel: panel_human.tsv
-    collapse:
-      endometrial fibroblasts: stromal
-      decidual cells: stromal
     labels:                       # internal lineage routing value -> output slug
       stromal: stromal
       epithelial: epithelial

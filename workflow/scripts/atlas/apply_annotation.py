@@ -40,30 +40,24 @@ def load_choices(csv) -> dict:
 
 
 def build_rollup(fine_cfg: dict, coarse: str) -> dict:
-    """fine label -> coarse label, from a spec `fine:` block."""
-    if not fine_cfg:
-        return {}
-    if fine_cfg.get("mode") == "markers":
-        return {lab: coarse for lab in fine_cfg.get("from_groups", {})}
+    """fine label -> coarse label, from a spec `fine:` block.
 
-    # Any mode declaring an explicit `labels` list rolls up the same way: the rollup
-    # is a function of the labels, not of where they were sourced from. Gating on
-    # mode == "csv" would return {} for an h5ad-sourced lineage, writing fine labels
-    # into the coarse column while the pipeline still exits 0.
-    if fine_cfg.get("labels"):
-        out = {}
-        for lab in fine_cfg.get("labels", []):
-            if "rollup_all" in fine_cfg:
-                out[lab] = fine_cfg["rollup_all"]
-                continue
-            for pref, tgt in fine_cfg.get("rollup_prefix", {}).items():
-                if str(lab).startswith(pref):
-                    out[lab] = tgt
-                    break
-            else:
-                out[lab] = coarse
-        return out
-    return {}
+    A lineage with no `labels` has no fine labels: its CSV carries coarse labels and
+    nothing rolls up. Otherwise every listed label maps to `rollup_all`, to the
+    `rollup_prefix` entry it starts with, or to the lineage's coarse label.
+    """
+    out = {}
+    for lab in (fine_cfg or {}).get("labels", []):
+        if "rollup_all" in fine_cfg:
+            out[lab] = fine_cfg["rollup_all"]
+            continue
+        for pref, tgt in fine_cfg.get("rollup_prefix", {}).items():
+            if str(lab).startswith(pref):
+                out[lab] = tgt
+                break
+        else:
+            out[lab] = coarse
+    return out
 
 
 def build_vocabulary_rollup(vocab: dict) -> dict:

@@ -1,35 +1,35 @@
-cluster,label
-0,epithelial
-1,perivascular
-2,epithelial
-3,EXCLUDE
-4,perivascular
-5,immune
-6,stromal
-7,stromal
-8,stromal
-9,stromal
-10,stromal
-11,stromal
-12,epithelial
-13,immune
-14,stromal
-15,stromal
-16,smc
-17,stromal
-18,epithelial
-19,stromal
-20,stromal
-21,stromal
-22,epithelial
-23,immune
-24,stromal
-25,stromal
-26,stromal
-27,stromal
-28,immune
-29,immune
-30,EXCLUDE
-31,stromal
-32,EXCLUDE
-33,epithelial
+cluster,label,n_cells,res,note
+0,epithelial,1201,leiden_scVI_2.5,"CDH1 0.41; PAX8 0.60; EPCAM 0.28 | top vs lineage: RHEX 1.00, CADM1 0.96, EYA2 0.97"
+1,perivascular,996,leiden_scVI_2.5,"PECAM1 0.80; FLT1 0.70; RGS5 0.05 | top vs lineage: ANO2 0.80, PLCB4 0.84, LIFR 0.83"
+2,epithelial,4093,leiden_scVI_2.5,"CDH1 0.38; PAX8 0.60; EPCAM 0.23 | top vs lineage: EYA2 0.98, NPAS3 0.98, MECOM 0.99"
+3,EXCLUDE,,leiden_scVI_2.5,"EXCLUDE: doublet score med 12.4, genes med 2168, 0.02 co-express 2+ lineage panels (stromal 0.30, epithelial 0.06, smc_mural 0.03)"
+4,perivascular,817,leiden_scVI_2.5,"PECAM1 0.74; FLT1 0.05; RGS5 0.02 | top vs lineage: MMRN1 0.91, TFPI 0.96, SMAD1 0.94"
+5,immune,870,leiden_scVI_2.5,"PTPRC 0.79 | top vs lineage: TBXAS1 0.86, FMN1 0.86, PLXDC2 0.94"
+6,stromal,3677,leiden_scVI_2.5,"PDGFRA 0.82; DCN 0.79; PRL 0.05 | top vs lineage: NEAT1 0.99, MMP10 0.80, SOX4 0.93"
+7,stromal,2475,leiden_scVI_2.5,"PDGFRA 0.82; DCN 0.76; PRL 0.01 | top vs lineage: MMP11 0.85, PHC2 0.83, DIO2 0.76"
+8,stromal,2021,leiden_scVI_2.5,"PDGFRA 0.76; DCN 0.72; PRL 0.01 | top vs lineage: PRDM1 0.91, FAM155A 0.90, CASC15 0.91"
+9,stromal,4171,leiden_scVI_2.5,"PDGFRA 0.75; DCN 0.84; PRL 0.00 | top vs lineage: LUM 0.80, SNCAIP 0.88, COL3A1 0.95"
+10,stromal,1061,leiden_scVI_2.5,"PDGFRA 0.41; DCN 0.54; PRL 0.00 | top vs lineage: EBF1 0.79, GUCY1A2 0.62, PRKG1 0.78"
+11,stromal,4449,leiden_scVI_2.5,"PDGFRA 0.76; DCN 0.88; PRL 0.00 | top vs lineage: SLC8A1 0.89, SYT1 0.83, IGFBP3 0.85"
+12,epithelial,4657,leiden_scVI_2.5,"CDH1 0.42; PAX8 0.86; EPCAM 0.50 | top vs lineage: GABRP 0.94, CLDN10 0.91, BICD1 0.97"
+13,immune,214,leiden_scVI_2.5,"PTPRC 0.52 | top vs lineage: IL18R1 0.93, PZP 0.93, A2M 0.94"
+14,stromal,3744,leiden_scVI_2.5,"PDGFRA 0.78; DCN 0.64; PRL 0.01 | top vs lineage: VMP1 0.96, SGIP1 0.95, ADAMTS2 0.90"
+15,stromal,2334,leiden_scVI_2.5,"PDGFRA 0.70; DCN 0.76; PRL 0.00 | top vs lineage: ACTB 0.86, TMSB4X 0.82, PTMA 0.80"
+16,smc,2084,leiden_scVI_2.5,"ACTA2 0.79; MYH11 0.77; TAGLN 0.54 | top vs lineage: KCNMA1 0.83, DPP6 0.90, CARMN 0.81"
+17,stromal,3820,leiden_scVI_2.5,"PDGFRA 0.67; DCN 0.77; PRL 0.00 | top vs lineage: KCNIP4 0.96, LSAMP 0.93, MIR99AHG 0.97"
+18,epithelial,1966,leiden_scVI_2.5,"CDH1 0.26; PAX8 0.70; EPCAM 0.27 | top vs lineage: CTNNA2 0.97, KIAA1217 0.98, CCSER1 0.94"
+19,stromal,4989,leiden_scVI_2.5,"PDGFRA 0.66; DCN 0.78; PRL 0.00 | top vs lineage: MIR99AHG 0.95, PBX1 0.93, IGFBP5 0.63"
+20,stromal,3925,leiden_scVI_2.5,"PDGFRA 0.66; DCN 0.81; PRL 0.00 | top vs lineage: PTCH1 0.89, ANO4 0.74, KCNIP4 0.92"
+21,stromal,3916,leiden_scVI_2.5,"PDGFRA 0.63; DCN 0.77; PRL 0.00 | top vs lineage: KCNIP4 1.00, LSAMP 0.93, MFSD4B 0.93"
+22,epithelial,80,leiden_scVI_2.5,"CDH1 0.67; PAX8 0.86; EPCAM 0.72 | top vs lineage: CAPS 0.96, STK33 0.99, CFAP43 0.95"
+23,immune,2575,leiden_scVI_2.5,"PTPRC 0.96 | top vs lineage: PARP8 0.93, ARHGAP15 0.90, IKZF1 0.85"
+24,stromal,682,leiden_scVI_2.5,"PDGFRA 0.72; DCN 0.91; PRL 0.00 | top vs lineage: IGFBP5 0.87, SFRP4 0.88, RPLP1 0.74"
+25,stromal,3580,leiden_scVI_2.5,"PDGFRA 0.59; DCN 0.69; PRL 0.00 | top vs lineage: LSAMP 0.87, MFSD4B 0.89, PBX1 0.92"
+26,stromal,961,leiden_scVI_2.5,"PDGFRA 0.81; DCN 0.86; PRL 0.00 | top vs lineage: IGFBP7 0.91, RARRES1 0.65, COL3A1 0.94"
+27,stromal,946,leiden_scVI_2.5,"PDGFRA 0.57; DCN 0.53; PRL 0.01 | top vs lineage: FTH1 0.71, SAMD4A 0.80, NAMPT 0.74"
+28,immune,1248,leiden_scVI_2.5,"PTPRC 0.93 | top vs lineage: PARP8 0.97, TXK 0.89, PIP4K2A 0.94"
+29,immune,159,leiden_scVI_2.5,"PTPRC 0.69 | top vs lineage: IL7R 0.91, AFF3 0.93, FKBP5 0.91"
+30,EXCLUDE,,leiden_scVI_2.5,"EXCLUDE: doublet score med 0.0, genes med 1270, 0.00 co-express 2+ lineage panels (stromal 0.01, immune 0.01, epithelial 0.00)"
+31,stromal,1253,leiden_scVI_2.5,"PDGFRA 0.37; DCN 0.23; PRL 0.01 | top vs lineage: NEAT1 1.00, COL6A3 0.91, C11orf96 0.76"
+32,EXCLUDE,,leiden_scVI_2.5,"EXCLUDE: doublet score med 0.0, genes med 722, 0.00 co-express 2+ lineage panels (stromal 0.25, epithelial 0.00, immune 0.00)"
+33,epithelial,182,leiden_scVI_2.5,"CDH1 0.35; PAX8 0.92; EPCAM 0.15 | top vs lineage: PAEP 0.97, NEAT1 1.00, NDRG1 0.95"

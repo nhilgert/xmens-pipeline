@@ -1,34 +1,34 @@
-cluster,label
-0,EXCLUDE
-1,endothelial_blood
-2,endothelial_blood
-3,endothelial_blood
-4,EXCLUDE
-5,endothelial_blood
-6,endothelial_blood
-7,endothelial_blood
-8,endothelial_blood
-9,endothelial_blood
-10,endothelial_blood
-11,endothelial_blood
-12,endothelial_blood
-13,endothelial_blood
-14,endothelial_blood
-15,endothelial_blood
-16,endothelial_blood
-17,endothelial_blood
-18,endothelial_blood
-19,endothelial_blood
-20,endothelial_blood
-21,endothelial_blood
-22,endothelial_blood
-23,endothelial_blood
-24,endothelial_blood
-25,EXCLUDE
-26,endothelial_blood
-27,endothelial_blood
-28,endothelial_blood
-29,endothelial_blood
-30,endothelial_blood
-31,endothelial_blood
-32,endothelial_blood
+cluster,label,n_cells,res,note
+0,EXCLUDE,153,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 0.90 (lineage q75 0.01), genes med 1939 (lineage q25 898), co-expression 0.05"
+1,endothelial_blood,143,leiden_scVI_3.0,"Pecam1 0.94; Flt1 0.97; Cldn5 0.24; Cdh5 0.76 | top vs lineage: Top2a 0.80, Diaph3 0.80, Auts2 0.82"
+2,endothelial_blood,91,leiden_scVI_3.0,"Pecam1 0.82; Flt1 0.89; Cldn5 0.02; Cdh5 0.53 | top vs lineage: Rundc3b 0.86, Abcb1a 0.75, Dach1 0.85"
+3,endothelial_blood,201,leiden_scVI_3.0,"Pecam1 0.92; Flt1 0.94; Cldn5 0.04; Cdh5 0.67 | top vs lineage: Top2a 0.88, Diaph3 0.85, Mki67 0.76"
+4,EXCLUDE,127,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 0.00 (lineage q75 0.01), genes med 1295 (lineage q25 898), co-expression 0.02"
+5,endothelial_blood,241,leiden_scVI_3.0,"Pecam1 0.79; Flt1 0.75; Cldn5 0.02; Cdh5 0.46 | top vs lineage: Prkg1 0.82, Zfp521 0.80, Rora 0.81"
+6,endothelial_blood,52,leiden_scVI_3.0,"Pecam1 0.90; Flt1 0.85; Cldn5 0.02; Cdh5 0.63 | top vs lineage: Kif11 0.77, Lockd 0.65, Cenpe 0.67"
+7,endothelial_blood,147,leiden_scVI_3.0,"Pecam1 0.86; Flt1 0.91; Cldn5 0.03; Cdh5 0.61 | top vs lineage: Diaph3 0.86, Rad51b 0.79, Top2a 0.78"
+8,endothelial_blood,161,leiden_scVI_3.0,"Pecam1 0.80; Flt1 0.75; Cldn5 0.02; Cdh5 0.33 | top vs lineage: Ebf1 0.79, Etl4 0.68, Nrp1 0.64"
+9,endothelial_blood,148,leiden_scVI_3.0,"Pecam1 0.90; Flt1 0.98; Cldn5 0.14; Cdh5 0.66 | top vs lineage: Piezo2 0.95, Spred1 0.78, Nrp1 0.86"
+10,endothelial_blood,98,leiden_scVI_3.0,"Pecam1 0.74; Flt1 0.73; Cldn5 0.11; Cdh5 0.64 | top vs lineage: Ptma 0.70, Tmsb4x 0.65, Actb 0.64"
+11,endothelial_blood,64,leiden_scVI_3.0,"Pecam1 0.73; Flt1 0.73; Cldn5 0.03; Cdh5 0.47 | top vs lineage: Zfp521 0.81, Bnc2 0.62, Cadm1 0.52"
+12,endothelial_blood,145,leiden_scVI_3.0,"Pecam1 0.93; Flt1 0.99; Cldn5 0.27; Cdh5 0.83 | top vs lineage: Hspb1 0.77, Sparc 0.97, Hspa1b 0.79"
+13,endothelial_blood,140,leiden_scVI_3.0,"Pecam1 0.88; Flt1 0.90; Cldn5 0.14; Cdh5 0.56 | top vs lineage: Chn2 0.79, Auts2 0.69, Pvt1 0.71"
+14,endothelial_blood,14,leiden_scVI_3.0,"Pecam1 0.86; Flt1 0.64; Cldn5 0.14; Cdh5 0.57 | top vs lineage: Arhgap18 0.93, Mast4 0.93, Fry 0.79"
+15,endothelial_blood,51,leiden_scVI_3.0,"Pecam1 0.94; Flt1 0.90; Cldn5 0.04; Cdh5 0.65 | top vs lineage: Etl4 0.88, Elmo1 0.92, Plcb1 0.94"
+16,endothelial_blood,68,leiden_scVI_3.0,"Pecam1 0.81; Flt1 0.82; Cldn5 0.09; Cdh5 0.44 | top vs lineage: S100a6 0.57, Plpp3 0.78, Des 0.43"
+17,endothelial_blood,56,leiden_scVI_3.0,"Pecam1 0.96; Flt1 0.91; Cldn5 0.07; Cdh5 0.75 | top vs lineage: Adamtsl1 0.62, Mast4 0.91, Pik3r3 0.77"
+18,endothelial_blood,66,leiden_scVI_3.0,"Pecam1 0.73; Flt1 0.83; Cldn5 0.02; Cdh5 0.56 | top vs lineage: Des 0.52, Serpinh1 0.56, Actb 0.65"
+19,endothelial_blood,158,leiden_scVI_3.0,"Pecam1 0.82; Flt1 0.96; Cldn5 0.01; Cdh5 0.46 | top vs lineage: Plcb1 0.94, Meis2 0.95, Prex2 0.87"
+20,endothelial_blood,138,leiden_scVI_3.0,"Pecam1 0.70; Flt1 0.72; Cldn5 0.00; Cdh5 0.30 | top vs lineage: Top2a 0.57, Diaph3 0.49, Rad51b 0.51"
+21,endothelial_blood,116,leiden_scVI_3.0,"Pecam1 0.81; Flt1 0.86; Cldn5 0.05; Cdh5 0.58 | top vs lineage: Plcb1 0.94, Kcnq1ot1 0.87, Kcnq1 0.78"
+22,endothelial_blood,124,leiden_scVI_3.0,"Pecam1 0.88; Flt1 0.97; Cldn5 0.15; Cdh5 0.88 | top vs lineage: Hdac9 0.94, Arhgef28 0.93, Mast4 0.94"
+23,endothelial_blood,33,leiden_scVI_3.0,"Pecam1 0.64; Flt1 0.79; Cldn5 0.15; Cdh5 0.55 | top vs lineage: Fubp1 0.73, Tead1 0.64, Srgap1 0.61"
+24,endothelial_blood,130,leiden_scVI_3.0,"Pecam1 0.98; Flt1 0.98; Cldn5 0.15; Cdh5 0.93 | top vs lineage: Sparc 0.98, Igfbp3 0.98, Cd93 0.92"
+25,EXCLUDE,195,leiden_scVI_3.0,"EXCLUDE: conservative exclusion; doublet med 7.11 (lineage q75 0.01), genes med 2248 (lineage q25 898), co-expression 0.23"
+26,endothelial_blood,87,leiden_scVI_3.0,"Pecam1 0.90; Flt1 0.99; Cldn5 0.14; Cdh5 0.78 | top vs lineage: Igfbp3 0.98, Kcnq1 0.89, Kcnq1ot1 0.93"
+27,endothelial_blood,136,leiden_scVI_3.0,"Pecam1 0.80; Flt1 0.90; Cldn5 0.11; Cdh5 0.57 | top vs lineage: Rapgef5 0.86, Arhgef28 0.79, Hdac9 0.85"
+28,endothelial_blood,129,leiden_scVI_3.0,"Pecam1 0.94; Flt1 0.98; Cldn5 0.05; Cdh5 0.82 | top vs lineage: Depp1 0.70, Arhgap29 0.92, Myh9 0.95"
+29,endothelial_blood,73,leiden_scVI_3.0,"Pecam1 0.85; Flt1 0.99; Cldn5 0.05; Cdh5 0.70 | top vs lineage: Hspa1b 0.81, Hspb1 0.78, Hspa1a 0.75"
+30,endothelial_blood,73,leiden_scVI_3.0,"Pecam1 0.85; Flt1 0.96; Cldn5 0.07; Cdh5 0.73 | top vs lineage: Camta1 0.93, Tnfrsf9 0.82, Hdac9 0.95"
+31,endothelial_blood,281,leiden_scVI_3.0,"Pecam1 0.92; Flt1 0.96; Cldn5 0.41; Cdh5 0.78 | top vs lineage: Hdac9 0.99, Jade1 0.86, Focad 0.85"
+32,endothelial_blood,123,leiden_scVI_3.0,"Pecam1 0.82; Flt1 0.89; Cldn5 0.03; Cdh5 0.54 | top vs lineage: Ivns1abp 0.65, Igfbp3 0.83, Kcnj2 0.25"
