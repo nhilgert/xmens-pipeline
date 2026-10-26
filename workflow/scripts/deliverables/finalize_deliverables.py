@@ -1,19 +1,20 @@
-#!/usr/bin/env python
-"""finalize_deliverables (04g) -- promote source objects into an immutable,
-dated, sha256-manifested release under data/deliverables/<release>/.
+"""Promote source objects into an immutable, dated, sha256-manifested release.
 
-Promotion, NOT regeneration: the deliverable objects are built/enriched by the
-notebooks; this rule makes the hand-off auditable and single-sourced. Per
-object it:
-  * streams a sha256 of the source, copies with mtime preserved, verifies the
-    copy's sha256 matches (corruption check across filesystems),
-  * validates canonical annotations against annotation_vocabulary.yaml using
-    the SAME checker the pipeline uses (apply_annotation.validate_canonical_annotations),
-  * records structure (n_obs/n_vars, obs columns, layers, obsm, uns keys) and
-    source provenance in MANIFEST.json.
+Called by rule `finalize_deliverables` (workflow/rules/04g_deliverables.smk). Reads
+the source h5ads named in config[deliverables][sources] and annotation_vocabulary.yaml.
+Writes data/deliverables/<release>/<name>.h5ad for each source and MANIFEST.json.
 
-Releases are immutable: an existing release file with a matching sha256 is
-skipped (idempotent re-runs); a mismatching one is a hard error -- bump
+This is promotion, not regeneration: the deliverable objects are built and enriched
+by the notebooks, and this step makes the hand-off auditable and single-sourced.
+Per object it streams a sha256 of the source, copies with mtime preserved, verifies
+the copy's sha256 (corruption check across filesystems), validates the canonical
+annotations with the same checker the pipeline uses
+(apply_annotation.validate_canonical_annotations), and records structure
+(n_obs/n_vars, obs columns, layers, obsm, uns keys) and source provenance in the
+manifest.
+
+Releases are immutable. An existing release file with a matching sha256 is skipped,
+so re-runs are idempotent. A mismatching one is a hard error: bump
 config[deliverables][release] instead of overwriting.
 """
 import hashlib
@@ -27,10 +28,12 @@ from pathlib import Path
 import anndata as ad
 import yaml
 
-# the shared annotation checker lives in workflow/scripts/atlas/
+# The shared annotation checker lives in workflow/scripts/atlas/; Snakemake
+# script directives cannot import sibling directories without extending the path.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "atlas"))
 from apply_annotation import validate_canonical_annotations  # noqa: E402
 
+# Snakemake inputs ----
 snk = snakemake  # noqa: F821 (injected by Snakemake)
 sources = dict(snk.params.sources)
 release = str(snk.params.release)
@@ -46,7 +49,7 @@ def say(msg):
     print(f"[finalize:{release}] {msg}", flush=True)
 
 
-def sha256(path, chunk=1 << 24):
+def sha256(path, chunk=1 << 24):  # 16 MiB per read (the h5ads are multi-GB)
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for b in iter(lambda: f.read(chunk), b""):
@@ -54,6 +57,7 @@ def sha256(path, chunk=1 << 24):
     return h.hexdigest()
 
 
+# Promote each source ----
 entries = {}
 for name, src in sources.items():
     src = Path(src)
@@ -63,6 +67,8 @@ for name, src in sources.items():
     say(f"{name}: hashing source {src}")
     src_sha = sha256(src)
 
+    # Copy through a temp file and verify the hash before the rename, so a
+    # partial or corrupted transfer never appears under the release name.
     if dst.exists():
         if sha256(dst) == src_sha:
             say(f"{name}: already promoted (sha match) -- skipping copy")
@@ -73,7 +79,7 @@ for name, src in sources.items():
                 f"rather than overwriting.")
     else:
         tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
-        say(f"{name}: copying ({src.stat().st_size / 1e9:.2f} GB)")
+        say(f"{name}: copying ({src.stat().st_size / 1e9:.2f} GB)")  # bytes -> GB
         shutil.copy2(src, tmp)          # copy2 preserves the source mtime
         copy_sha = sha256(tmp)
         if copy_sha != src_sha:
@@ -101,6 +107,7 @@ for name, src in sources.items():
     }
     del a
 
+# Manifest ----
 manifest = {
     "release": release,
     "created": datetime.now().isoformat(timespec="seconds"),

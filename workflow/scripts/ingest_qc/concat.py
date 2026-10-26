@@ -1,11 +1,10 @@
-"""Stage 01c - concatenate per-sample QC'd objects into a per-species object.
+"""Concatenate the per-sample QC'd objects of one species into one AnnData.
 
-Keeps ALL cells (placed + unplaced). Harmonizes obs to use 'sample' (tolerant of
-either 'sample' or legacy 'sample_id' on the inputs), adds a clean 'cell_barcode'
-with the trailing -1 suffix stripped (for joining to collaborator objects on
-sample+barcode), and TRIMS obs to a meaningful whitelist (drops redundant /
-constant / vestigial columns - see KEEP_OBS). Preserves layers['counts'] and
-obsm['spatial'].
+Called by rule `concat` (workflow/rules/01c_concat.smk). Reads the data/interim/qc/
+objects written by rule `qc`, keeps every cell (placed and unplaced), harmonizes the
+sample key to 'sample', adds 'cell_barcode' with the 10x suffix stripped (the join
+key to collaborator objects), and trims obs to the KEEP_OBS whitelist.
+layers['counts'] and obsm['spatial'] are carried through.
 
 Writes data/interim/qc_passed_{species}.h5ad.
 """
@@ -42,40 +41,44 @@ with open(logfile, "w") as log:
 
     say(f"concatenating {len(inputs)} samples")
 
+    # Load samples ----
     objs = {}
     for path in inputs:
         a = sc.read_h5ad(path)
-        # standardize the sample key: prefer 'sample', fall back to legacy 'sample_id'
+
+        # Older per-sample objects carry the sample key as 'sample_id'.
         if "sample" not in a.obs.columns:
             if "sample_id" in a.obs.columns:
                 a.obs["sample"] = a.obs["sample_id"].astype(str)
             else:
                 raise KeyError(f"{path}: no 'sample' or 'sample_id' in obs")
-        # drop the legacy column so the concatenated object is clean
         if "sample_id" in a.obs.columns:
             del a.obs["sample_id"]
         sample = str(a.obs["sample"].iloc[0])
-        # clean barcode (suffix stripped) for joining to collaborator objects
+
+        # Suffix-stripped barcode: the join key to collaborator objects.
         a.obs["cell_barcode"] = strip_suffix(a.obs_names.to_series()).values
         say(f"  {sample}: {a.n_obs} cells")
         objs[sample] = a
 
-    # concat keeps all cells; index made unique by appending the sample key so
-    # stripped barcodes (unique only within a sample) don't collide.
+    # Concatenate ----
+    # obs_names are made unique by appending the sample key: a 10x barcode is unique
+    # only within a sample.
     adata = ad.concat(
         objs,
         join="outer",
         label="sample_concat",     # records which input each cell came from
         index_unique="-",
-        merge="same",              # keep var/obsm columns identical across inputs
+        merge="same",              # keep var annotations that are identical across inputs
     )
-    # 'sample' is the authoritative grouping; 'sample_concat' duplicates it - drop.
+
+    # 'sample' is the authoritative grouping; 'sample_concat' duplicates it.
     if "sample_concat" in adata.obs.columns:
         del adata.obs["sample_concat"]
 
     adata.obs["species"] = species
 
-    # --- trim obs to the meaningful whitelist (+ cell_barcode, always kept) ---
+    # Trim obs ----
     keep = [c for c in KEEP_OBS if c in adata.obs.columns]
     keep_set = set(keep) | {"cell_barcode"}
     dropped = [c for c in adata.obs.columns if c not in keep_set]
@@ -87,7 +90,7 @@ with open(logfile, "w") as log:
     say(f"obs columns: {list(adata.obs.columns)}")
     say(f"layers: {list(adata.layers.keys())} | obsm: {list(adata.obsm.keys())}")
 
-    # sanity: counts layer + spatial present (scVI + spatial steps need them)
+    # scVI needs the counts layer and the spatial rules need obsm['spatial'].
     if "counts" not in adata.layers:
         say("WARNING: no 'counts' layer after concat - scVI needs raw counts")
     if "spatial" not in adata.obsm:
@@ -98,5 +101,6 @@ with open(logfile, "w") as log:
     say(f"placed cells: {n_placed}/{adata.n_obs} "
         f"({100 * n_placed / adata.n_obs:.1f}%)")
 
+    # Write ----
     adata.write_h5ad(out)
     say(f"wrote -> {out}")

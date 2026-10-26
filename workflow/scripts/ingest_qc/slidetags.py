@@ -1,10 +1,11 @@
-"""Stage 00a — normalize fork Slide-tags coords into the xmens layout.
+"""Normalize a Slide-tags fork coordinate export into the pipeline's coords layout.
 
-Reads the per-sample coordinate CSV produced by the vendored fork
-(external/slidetags, run separately), validates a barcode + numeric x/y, and
-writes the canonical data/interim/coords/{sample}.csv that 00b_ingest attaches
-as adata.obsm['spatial']. Faithful pass-through: no spatial-outlier filtering
-or coordinate transforms — QC owns that downstream.
+Called by rule `slidetags` (workflow/rules/00a_slidetags.smk). Reads the per-sample
+coordinate CSV produced by the vendored fork (external/slidetags, run separately),
+checks for a barcode column and numeric x/y, and writes the canonical
+data/interim/coords/{sample}.csv read by rule `spatial_pseudotime` (07). Rule `ingest`
+reads the fork's CSV itself via config["coords"]. This is a
+pass-through: spatial-outlier filtering and coordinate transforms belong to QC.
 """
 import os
 import pandas as pd
@@ -22,6 +23,8 @@ with open(logfile, "w") as log:
     df = pd.read_csv(src)
     say(f"loaded {df.shape[0]} rows, columns={list(df.columns)}")
 
+    # Header names differ between fork export versions, so columns are matched
+    # case-insensitively against the known aliases.
     lower = {c.lower(): c for c in df.columns}
     def pick(name, *alts):
         for key in (name, *alts):
@@ -40,11 +43,13 @@ with open(logfile, "w") as log:
     out["x"] = pd.to_numeric(out["x"], errors="coerce")
     out["y"] = pd.to_numeric(out["y"], errors="coerce")
 
+    # Rows without a numeric position cannot be placed and are dropped with a count.
     n0 = len(out)
     out = out.dropna(subset=["x", "y"])
     if len(out) < n0:
         say(f"dropped {n0 - len(out)} rows with non-numeric/NaN coords")
 
+    # The ingest join is keyed on barcode, so each barcode may appear once.
     dups = int(out["barcode"].duplicated().sum())
     if dups:
         say(f"warning: {dups} duplicate barcodes; keeping first")

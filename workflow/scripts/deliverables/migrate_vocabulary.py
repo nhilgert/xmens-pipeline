@@ -1,12 +1,13 @@
 """migrate_release_vocabulary (04g): relabel a frozen release forward to the
 current annotation vocabulary, so a vocabulary change reaches a new release
-without re-running annotation (04 to 04e).
+without re-running annotation (04 to 04e). Called by rule
+`migrate_release_vocabulary` (workflow/rules/04g_deliverables.smk).
 
 Reads the objects of config vocab_migration.from_release, annotation_vocabulary.yaml
 and, for each subtype split in config vocab_migration.subtype_splits, the pinned
 clustering and its decision CSV. Writes the relabeled objects and a TSV of every
 label value changed with the number of cells. Expression, embeddings and every other
-obs column are left as they are; the script fails if anything besides the label
+obs column are left as they are. The script fails if anything besides the label
 columns differs, or if a split does not reproduce the counts recorded in the
 vocabulary's content task.
 
@@ -33,7 +34,7 @@ HASH_BLOCK_BYTES = 1 << 24  # 16 MiB per read while hashing a multi-GB h5ad
 
 
 def rename_column(adata, column: str, aliases: dict) -> list[dict]:
-    """Rename superseded values in one obs column; return one report row per value."""
+    """Rename superseded values in one obs column and return one report row per value."""
     values = adata.obs[column]
     counts = values.astype(str).value_counts()
     renamed = [
@@ -82,6 +83,7 @@ def find_superseded_elsewhere(adata, aliases: dict) -> dict:
 
 
 def sha256_of(path: Path) -> str:
+    """Streamed sha256 of a file, used to pin the clustering a split was decided on."""
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
         for block in iter(lambda: handle.read(HASH_BLOCK_BYTES), b""):
@@ -90,7 +92,7 @@ def sha256_of(path: Path) -> str:
 
 
 def cell_key(obs: pd.DataFrame) -> pd.Series:
-    """sample||barcode, normalized as in merge_reannotated.py (bleeding == menstrual)."""
+    """Cell key sample||barcode, normalized as in merge_reannotated.py (bleeding == menstrual)."""
     sample = obs["sample"].astype(str).str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
     sample = sample.str.replace("bleeding", "menstrual", regex=False)
     barcode = obs["cell_barcode"].astype(str).str.replace(r"-\d+$", "", regex=True)
@@ -176,7 +178,7 @@ def split_labels(adata, task: str, split: dict, vocab: dict) -> pd.Series:
 
 
 def apply_split(adata, task: str, split: dict, vocab: dict) -> list[dict]:
-    """Write the split labels into cell_subtype; return one report row per new label."""
+    """Write the split labels into cell_subtype and return one report row per new label."""
     new_label = split_labels(adata, task, split, vocab)
 
     # New categories are appended; existing category order (and any positional
@@ -217,7 +219,7 @@ def check_only_labels_changed(
 
 
 def migrate(src: Path, vocab: dict, splits: dict) -> tuple[ad.AnnData, list[dict]]:
-    """Relabel one release object in memory; return it with the rows of the change table."""
+    """Relabel one release object in memory and return it with the rows of the change table."""
     adata = ad.read_h5ad(src)
     obs_before = adata.obs.copy()
     shape_before = adata.shape
@@ -261,6 +263,7 @@ def main(
     report_path: Path | None,
 ):
     vocab = yaml.safe_load(open(vocab_path))
+
     print(
         f"vocabulary {vocab['schema_version']} from {vocab_path}; splits {list(splits)}",
         flush=True,
@@ -270,6 +273,7 @@ def main(
     if unknown:
         raise ValueError(f"subtype_splits name objects not in this release: {sorted(unknown)}")
 
+    # Objects are migrated one at a time; each is freed before the next is read.
     rows = []
     for i, src in enumerate(sources):
         adata, report = migrate(src, vocab, splits)
@@ -289,6 +293,8 @@ def main(
 
 if "snakemake" in globals():
     snk = snakemake  # noqa: F821 (injected by Snakemake)
+
+    # Snakemake does not capture prints from script: directives, so route them to the log.
     sys.stdout = sys.stderr = open(snk.log[0], "w")
     main(
         sources=[Path(p) for p in snk.input.objects],

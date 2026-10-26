@@ -1,12 +1,11 @@
-"""Stage 00b — build a per-sample AnnData from CellBender counts + Slide-tags coords.
+"""Build one per-sample AnnData from CellBender counts and Slide-tags coordinates.
 
-Reads the CellBender-corrected count matrix (.h5, no metadata), writes
-species/timepoint from the sample sheet into obs (the .h5 carries neither, and
-human objects had timepoint=NaN — the sheet is authoritative), joins the DBSCAN
-spatial coordinates from the fork's barcode-keyed coords CSV (Source 1), and
-keeps ALL cells (coords are nullable obs columns; unplaced cells stay).
-
-See DATA_PROVENANCE.md sections 2-3 for source/format details.
+Called by rule `ingest` (workflow/rules/00b_ingest.smk). Reads the CellBender-corrected
+count matrix (.h5, which carries no sample metadata) and the barcode-keyed DBSCAN
+coordinate CSV exported by the Slide-tags fork (DATA_PROVENANCE.md sections 2-3).
+Writes data/interim/raw/{sample}.h5ad with the corrected counts in layers['counts'],
+species and timepoint from the sample sheet in obs, and nullable spatial coordinates
+in obs and obsm['spatial']. Every cell is kept, placed or not.
 """
 import os
 import numpy as np
@@ -31,7 +30,7 @@ with open(logfile, "w") as log:
     def say(msg):
         print(f"[ingest:{sample}] {msg}", file=log, flush=True)
 
-    # --- counts (CellBender .h5) ---
+    # Load counts ----
     say(f"reading CellBender counts: {counts_path}")
     adata = sc.read_10x_h5(counts_path)
     adata.var_names_make_unique()   # gene symbols have duplicates
@@ -42,7 +41,8 @@ with open(logfile, "w") as log:
     # even after any future normalization of X.
     adata.layers["counts"] = adata.X.copy()
 
-    # --- metadata from the sample sheet (authoritative) ---
+    # Sample metadata ----
+    # The .h5 carries no metadata, so the sample sheet is the only source of these columns.
     adata.obs["sample"] = sample
     adata.obs["species"] = species
     adata.obs["timepoint"] = timepoint
@@ -51,7 +51,7 @@ with open(logfile, "w") as log:
     for c in ["sample", "species", "timepoint", "modality", "coords_id"]:
         adata.obs[c] = adata.obs[c].astype("category")
 
-    # --- coords (Source 1: barcode-keyed fork export) ---
+    # Join spatial coordinates ----
     coords_path = os.path.join(coords_dir, coords_pattern.format(coords_id=coords_id))
     say(f"reading coords: {coords_path} (x={coords_x}, y={coords_y})")
     co = pd.read_csv(coords_path)
@@ -64,8 +64,9 @@ with open(logfile, "w") as log:
 
     co = co.set_index("barcode")
 
-    # Direct barcode join (suffixes already match, verified in provenance). If a
-    # future sample mismatches, the overlap count below will reveal it.
+    # Direct barcode join: the -1 suffixes already match on both sides (verified
+    # in DATA_PROVENANCE.md). A sample whose suffixes differ shows up as a low
+    # overlap in the log line below.
     common = adata.obs_names.intersection(co.index)
     say(f"barcode overlap: {len(common)}/{n0} cells have a coords row")
     if len(common) == 0:
@@ -74,7 +75,8 @@ with open(logfile, "w") as log:
             f"counts e.g. {list(adata.obs_names[:3])}; coords e.g. {list(co.index[:3])}"
         )
 
-    # Attach DBSCAN coords as nullable obs columns; unplaced cells stay as NaN.
+    # Coordinates are nullable obs columns: unplaced cells stay as NaN rather
+    # than being dropped, so QC sees the full barcode set.
     x = pd.Series(np.nan, index=adata.obs_names, dtype=float)
     y = pd.Series(np.nan, index=adata.obs_names, dtype=float)
     x.loc[common] = pd.to_numeric(co.loc[common, coords_x], errors="coerce")
@@ -86,11 +88,10 @@ with open(logfile, "w") as log:
     say(f"placed cells (non-null dbscan x AND y): {n_placed}/{n0} "
         f"({100 * n_placed / n0:.1f}%)")
 
-    # Also populate obsm['spatial'] for convenience (NaN for unplaced).
-    # Spatial rules subset to placed cells before using this.
+    # obsm['spatial'] mirrors the obs columns; spatial rules subset to placed cells first.
     adata.obsm["spatial"] = adata.obs[["x_um_dbscan", "y_um_dbscan"]].to_numpy(dtype=float)
 
-    # --- write (ALL cells kept) ---
+    # Write ----
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     adata.write_h5ad(out_path)
     say(f"wrote {adata.n_obs} cells x {adata.n_vars} genes -> {out_path}")

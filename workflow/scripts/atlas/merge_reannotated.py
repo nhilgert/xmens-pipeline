@@ -1,9 +1,11 @@
-#!/usr/bin/env python3
-"""Concatenate canonical per-lineage objects into one annotation-complete atlas.
+"""Concatenate the reannotated per-lineage objects into one per-species atlas.
 
-This script is shared by the normal and migration-only rules.  It never changes
-counts to satisfy a gate: expected/actual discrepancies are written as SUSPECT
-and the staged object is retained for human review.
+Called by rule `merge_reannotated` (04d_merge.smk). Reads every
+data/interim/reannotated/{species}_{lineage}.h5ad plus annotation_vocabulary.yaml and
+writes data/interim/refined_{species}.h5ad (obs reduced to the canonical columns, no
+embedding) and results/tables/refined_{species}_guardrail.tsv. Counts are never changed
+to satisfy a gate: expected/actual discrepancies are written as SUSPECT and the object
+is retained for human review.
 """
 import os
 from pathlib import Path
@@ -14,6 +16,7 @@ import pandas as pd
 import scanpy as sc
 import yaml
 
+# Snakemake plumbing ----
 
 sm = globals().get("snakemake")
 parts_in = list(sm.input.parts)
@@ -29,11 +32,13 @@ KEEP_OBS = ["sample", "cell_barcode", "timepoint", "cell_type", "cell_subtype"]
 
 
 def canon(series):
+    """Sample names comparable across objects: lower-case alphanumerics, one bleeding term."""
     series = series.astype(str).str.lower().str.replace(r"[^a-z0-9]", "", regex=True)
     return series.str.replace("bleeding", "menstrual", regex=False)
 
 
 def key(obs):
+    """sample||barcode, with the 10x lane suffix (-1) stripped from the barcode."""
     return canon(obs["sample"]) + "||" + obs["cell_barcode"].astype(str).str.replace(
         r"-\d+$", "", regex=True)
 
@@ -50,12 +55,15 @@ def gate_row(check, expected, actual):
     }
 
 
+# Load and check the lineage objects ----
+
 parts = []
 first_vars = None
 sum_cells = 0
 for path_string in parts_in:
     path = Path(path_string)
     obj = sc.read_h5ad(path)
+
     missing = sorted(set(("cell_type", "cell_subtype", "sample", "cell_barcode")) - set(obj.obs))
     if missing:
         raise ValueError(f"{path}: missing canonical/provenance obs columns {missing}")
@@ -63,18 +71,26 @@ for path_string in parts_in:
         raise ValueError(f"{path}: duplicated obs_names")
     if "counts" not in obj.layers:
         raise ValueError(f"{path}: missing raw counts layer")
+
+    # An inner join on var would silently drop genes if the lineage objects differed.
     if first_vars is None:
         first_vars = obj.var_names.copy()
     elif not obj.var_names.equals(first_vars):
         raise ValueError(f"{path}: var_names/order differs from first lineage object")
+
+    # The file stem is {species}_{lineage}; per-lineage embeddings are separate fits
+    # in different spaces, so they do not survive the merge (04e re-embeds).
     obj.obs["origin_lineage"] = path.stem.split("_", 1)[1]
     for embedding in ("X_scVI", "X_umap_scVI"):
         if embedding in obj.obsm:
             del obj.obsm[embedding]
     obj.obs = obj.obs[KEEP_OBS + ["origin_lineage"]].copy()
+
     print(f"  {path.name:34} {obj.n_obs:>7,} cells")
     sum_cells += obj.n_obs
     parts.append(obj)
+
+# Concatenate ----
 
 merged = ad.concat(parts, axis=0, join="inner", merge="same", uns_merge=None,
                    index_unique=None)
@@ -84,21 +100,27 @@ if merged.obs_names.has_duplicates:
     raise ValueError("merged object has duplicated obs_names")
 if "counts" not in merged.layers:
     raise ValueError("lost layers['counts']; 04e requires raw counts")
+
 merged.obs["cell_subtype"] = merged.obs["cell_subtype"].astype(object).fillna("").astype(str)
 merged.uns["annotation_schema_version"] = vocab["schema_version"]
 merged.uns["display_names"] = vocab["display_names"]
 print(f"\nmerged: {merged.n_obs:,} cells x {merged.n_vars:,} genes")
 
-# Enforce the post-04c coarse-fill contract before writing a staged atlas.
+# Vocabulary checks ----
+
+# The coarse-fill contract from 04c: every cell has a subtype, which is either a
+# subtype allowed under its cell_type or the cell_type itself.
 types = merged.obs["cell_type"].astype(str)
 subtypes = merged.obs["cell_subtype"].astype(str)
 empty_count = int((subtypes == "").sum())
 if empty_count:
     raise ValueError(f"merged {species}: cell_subtype has {empty_count} empty values")
+
 allowed_types = set(vocab["expected_coarse_counts"][species])
 invalid_types = sorted(set(types) - allowed_types)
 if invalid_types:
     raise ValueError(f"merged {species}: invalid cell_type values {invalid_types}")
+
 subtype_parent = {
     subtype: parent
     for parent, values in vocab["allowed"].items()
@@ -112,7 +134,12 @@ invalid_pairs = sorted({
 if invalid_pairs:
     raise ValueError(f"merged {species}: invalid subtype-parent pairs {invalid_pairs}")
 
-# Count gates are evidence, not mutation instructions.
+# Count gates ----
+
+# Gates are evidence, not mutation instructions: a mismatch is recorded as SUSPECT.
+# The expected subtype counts repeat the content_tasks blocks of
+# annotation_vocabulary.yaml (human_perivascular_split, mouse_endothelial_blood_only,
+# coarse_subtype_fill); the coarse counts come from expected_coarse_counts.
 rows = []
 expected_types = vocab["expected_coarse_counts"][species]
 actual_types = merged.obs["cell_type"].astype(str).value_counts()
@@ -121,6 +148,7 @@ for label, expected in expected_types.items():
 rows.append(gate_row("total_cells", vocab["expected_coarse_counts"]["totals"][species],
                      merged.n_obs))
 rows.append(gate_row("cell_subtype_empty", 0, empty_count))
+
 if species == "human":
     actual_sub = merged.obs["cell_subtype"].astype(str).value_counts()
     rows.extend([
@@ -145,13 +173,15 @@ if species == "human":
     ])
 else:
     actual_sub = merged.obs["cell_subtype"].astype(str).value_counts()
+
+    # Mouse epithelium is split into luminal/glandular; those counts live in the
+    # vocabulary's mouse_epithelial_split task.
     epi_split = vocab["content_tasks"]["mouse_epithelial_split"]["expected_counts"]
     rows.extend([
         gate_row("cell_subtype:endothelial_blood", 3487,
                  int(actual_sub.get("endothelial_blood", 0))),
         gate_row("cell_subtype:endothelial_lymph", 0,
                  int(actual_sub.get("endothelial_lymph", 0))),
-        # v3: mouse epithelium is split; expected counts live in the vocabulary.
         gate_row("cell_subtype:epithelial_luminal", epi_split["epithelial_luminal"],
                  int(actual_sub.get("epithelial_luminal", 0))),
         gate_row("cell_subtype:epithelial_glandular", epi_split["epithelial_glandular"],
@@ -167,8 +197,10 @@ else:
                       (subtypes == "perimetrial_cell")).sum())),
     ])
 
-# Reference agreement is partial because legacy human "perivascular cells" is
-# deliberately content-ambiguous.  Exclude unmapped reference labels.
+# Agreement with the legacy reference annotation ----
+
+# Agreement is partial by design: the legacy human "perivascular cells" label is
+# content-ambiguous, so reference labels without an import mapping are excluded.
 if ref_path and Path(ref_path).exists():
     them = sc.read_h5ad(ref_path, backed="r").obs.copy()
     them["k"] = key(them)
@@ -192,6 +224,10 @@ if ref_path and Path(ref_path).exists():
 else:
     print(f"note: reference object not found: {ref_path}")
 
+# Write the gate table and the merged object ----
+
+# Both are written to a temporary name and renamed, so a killed job cannot leave a
+# partial file that Snakemake would treat as complete.
 gate_table = pd.DataFrame(rows)
 report.parent.mkdir(parents=True, exist_ok=True)
 report_tmp = report.with_name(f".{report.name}.{os.getpid()}.tmp")
@@ -200,6 +236,7 @@ os.replace(report_tmp, report)
 print("\n=== count gates ===")
 print(gate_table.to_string(index=False))
 
+# Existing objects under a 'migrated' directory are never overwritten.
 out_h5ad.parent.mkdir(parents=True, exist_ok=True)
 if out_h5ad.exists() and "migrated" in out_h5ad.parts:
     raise FileExistsError(f"refusing to overwrite existing staged object: {out_h5ad}")

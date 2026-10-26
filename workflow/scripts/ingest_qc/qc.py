@@ -1,20 +1,15 @@
-"""Stage 01 - quality control, matching the project QC notebook (= Cevrim et al. 2025).
+"""Per-sample quality control, following the project QC notebook (Cevrim et al. 2025).
 
-Input: per-sample AnnData from 00b (X = CellBender-corrected counts;
-obs has species/timepoint/coords; coords nullable; all cells present).
+Called by rule `qc` (workflow/rules/01_qc.smk). Reads the per-sample AnnData from
+rule `ingest` (X = CellBender-corrected counts, all cells present, coordinates
+nullable). Applies, in the notebook's order: a hard floor on total counts, a fixed
+upper bound on mitochondrial percentage, 3-MAD outlier bounds on log10(x+1) of
+total_counts and n_genes_by_counts, then DoubletDetection (BoostClassifier) with
+doublets removed. Thresholds come from config['qc'] and config['doublet'].
+DoubletDetection lives in a separate env (01_qc.smk `conda:`). If the package is
+missing, doublet removal is skipped with a warning in the log.
 
-Procedure (Scanpy + DoubletDetection), faithful to qc notebook:
-  1. Compute QC metrics (mito/ribo/hb flags; mito on both mt-/MT- prefixes).
-  2. Hard floor: >= min_counts (500) total counts.
-  3. Mito %: fixed upper bound (8%).
-  4. MAD outliers on total_counts and n_genes_by_counts, thresholded on a
-     LOG10(x+1) scale with raw MAD, nmads=3.
-  5. DoubletDetection (BoostClassifier, leiden, standard_scaling, 40 iters,
-     n_top_var_genes=3000, p_thresh=1e-7, voter_thresh=0.5); remove doublets.
-     Requires the doubletdetection package (separate env via 01_qc.smk `conda:`);
-     if unavailable, doublet removal is SKIPPED with a warning.
-
-Writes data/interim/qc/{sample}.h5ad. Corrected counts kept in layers['counts'].
+Writes data/interim/qc/{sample}.h5ad with the corrected counts kept in layers['counts'].
 """
 import numpy as np
 import scanpy as sc
@@ -54,6 +49,7 @@ with open(logfile, "w") as log:
     def say(msg):
         print(f"[qc:{sample}] {msg}", file=log, flush=True)
 
+    # Global seed from config; BoostClassifier below is called without random_state.
     np.random.seed(seed)
 
     adata = sc.read_h5ad(inp)
@@ -63,7 +59,9 @@ with open(logfile, "w") as log:
     if "counts" not in adata.layers:
         adata.layers["counts"] = adata.X.copy()
 
-    # --- 1. QC metrics (mito on both prefixes, like the notebook) ---
+    # QC metrics ----
+    # Both the mouse (mt-) and human (MT-) prefixes are matched so one script
+    # serves both species, as in the notebook.
     adata.var["mt"] = adata.var_names.str.startswith(("mt-", "MT-"))
     adata.var["ribo"] = adata.var_names.str.startswith((
         "rps", "rpl", "mrps", "mrpl",
@@ -80,23 +78,27 @@ with open(logfile, "w") as log:
         say("WARNING: no mito genes matched - check gene naming for this species")
 
     sc.pp.calculate_qc_metrics(
-        adata, qc_vars=["mt", "ribo", "hb"],
-        percent_top=[20], log1p=True, inplace=True,
+        adata,
+        qc_vars=["mt", "ribo", "hb"],
+        percent_top=[20],  # pct_counts_in_top_20_genes, as in the notebook
+        log1p=True,
+        inplace=True,
     )
 
-    # Filtering is SEQUENTIAL, matching the QC notebook exactly: apply the
-    # count floor first (so junk barcodes don't distort the MAD bounds), then
-    # evaluate mito / MAD outliers on the surviving cells, in the notebook's
-    # order (mito -> total_counts -> n_genes_by_counts).
+    # Filtering is sequential, matching the QC notebook exactly: the count floor
+    # is applied first (so junk barcodes do not distort the MAD bounds), then the
+    # mito and MAD outlier flags are evaluated on the surviving cells and applied
+    # in the notebook's order (mito -> total_counts -> n_genes_by_counts).
 
-    # --- 2. hard floor on total counts (applied first, mutates the object) ---
+    # Count floor ----
     min_counts = qc["min_counts"]
     n_low = int((adata.obs["total_counts"] < min_counts).sum())
     sc.pp.filter_cells(adata, min_counts=min_counts)
     say(f"min {min_counts} counts: removed {n_low}, {adata.n_obs}/{n0} remain")
 
-    # --- 3. MAD outlier flags, computed on the FLOORED object ---
-    # (bounds reflect the real cell population, not the junk below the floor)
+    # MAD outlier flags ----
+    # Computed on the floored object, so the bounds reflect the real cell
+    # population rather than the junk below the floor.
     n_mads = qc["n_mads"]
     for metric in LOG_METRICS:
         vals = _log10p(adata.obs[metric].to_numpy())
@@ -108,12 +110,14 @@ with open(logfile, "w") as log:
             f"bounds=[{_inv_log10p(lo):.1f}, {_inv_log10p(hi):.1f}], "
             f"flag {int(adata.obs[f'{metric}_outlier'].sum())}")
 
-    # mito outlier flag (fixed upper bound)
+    # Mito uses a constant percentage cap from config, not a MAD bound.
     max_mito = qc["max_pct_mito"]
     adata.obs["pct_counts_mt_outlier"] = adata.obs["pct_counts_mt"] > max_mito
     say(f"mito > {max_mito}%: flag {int(adata.obs['pct_counts_mt_outlier'].sum())}")
 
-    # --- 4. apply the flags sequentially, in notebook order ---
+    # Apply the flags ----
+    # One metric at a time, in the notebook's order, so the per-step counts in
+    # the log line up with the notebook's.
     for metric in ("pct_counts_mt", "total_counts", "n_genes_by_counts"):
         n_before = adata.n_obs
         adata = adata[~adata.obs[f"{metric}_outlier"]].copy()
@@ -121,7 +125,9 @@ with open(logfile, "w") as log:
 
     say(f"after threshold QC: {adata.n_obs}/{n0} cells")
 
-    # --- 5. DoubletDetection (optional env) ---
+    # Doublet removal ----
+    # The fallback defaults below equal config/config.yaml (the paper's settings);
+    # config is the source of truth when it sets them.
     try:
         import doubletdetection
         ver = getattr(doubletdetection, "__version__", "?")
@@ -138,7 +144,8 @@ with open(logfile, "w") as log:
             n_top_var_genes=n_top,
             n_jobs=-1,
         )
-        # Fit on counts (matches notebook: clf.fit(adata.X) on corrected counts).
+
+        # Fit on the corrected counts, as the notebook does (clf.fit(adata.X)).
         preds = clf.fit(adata.layers["counts"]).predict(
             p_thresh=p_thresh, voter_thresh=voter_thresh
         )
@@ -151,6 +158,8 @@ with open(logfile, "w") as log:
         say("WARNING: doubletdetection not available in this env - SKIPPING doublet "
             "removal. Set config['envs']['doubletdetection'] to an env with it "
             "(==4.2 to match the paper).")
+    # A DoubletDetection failure is logged and the object is still written, so
+    # dry runs and partial environments complete (see the 01_qc.smk header).
     except Exception as e:  # noqa: BLE001
         say(f"WARNING: DoubletDetection failed ({e}); proceeding without doublet removal")
 

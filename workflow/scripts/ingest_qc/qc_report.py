@@ -1,12 +1,13 @@
-"""Stage 01b - QC diagnostic figures, mirroring the project QC notebook.
+"""QC diagnostic figures for one sample, mirroring the project QC notebook.
 
-Reads the PRE-QC raw object (full distributions + threshold lines) and the
-POST-QC object (survival + doublet calls), writes figures to params.outdir.
+Called by rule `qc_report` (workflow/rules/01b_qc_report.smk). Reads the pre-QC
+object from rule `ingest` (full distributions and threshold lines) and the post-QC
+object from rule `qc` (survival and doublet calls). Writes per-metric histograms
+(PNG) and summary.txt to params.outdir.
 
-Recomputes the same metrics and bounds that 01_qc uses (log10 scale, raw MAD,
-nmads from config; 500 floor; 8% mito) so the threshold lines on the plots
-exactly match what the filter applied. Filtering happens in 01_qc; this only
-visualizes.
+The metrics and bounds are recomputed exactly as rule `qc` computes them (log10
+scale, raw MAD, nmads/min_counts/max_pct_mito from config) so the threshold lines
+on the plots match what the filter applied. No filtering happens here.
 """
 import os
 import numpy as np
@@ -31,6 +32,7 @@ max_mito = qc["max_pct_mito"]
 n_mads = qc["n_mads"]
 LOG_METRICS = ("total_counts", "n_genes_by_counts")
 
+# Style set once; blues[6] fills the histograms, reds[5] draws threshold lines.
 sns.set_context("notebook", font_scale=1)
 sns.set_style("ticks")
 blues = sns.color_palette("Blues", 9)
@@ -53,7 +55,8 @@ with open(logfile, "w") as log:
 
     os.makedirs(outdir, exist_ok=True)
 
-    # --- pre-QC object: recompute metrics for plotting ---
+    # Load inputs ----
+    # The pre-QC object has no metrics yet; recompute them for plotting.
     adata = sc.read_h5ad(raw_path)
     n_raw = adata.n_obs
     say(f"raw: {n_raw} cells")
@@ -62,7 +65,7 @@ with open(logfile, "w") as log:
         adata, qc_vars=["mt"], percent_top=None, log1p=True, inplace=True
     )
 
-    # --- post-QC object: survival + doublets ---
+    # An unreadable QC'd object only loses the survival and doublet panels.
     try:
         qcd = sc.read_h5ad(qcd_path)
         n_qcd = qcd.n_obs
@@ -71,7 +74,10 @@ with open(logfile, "w") as log:
         qcd = None
         n_qcd = None
 
-    # --- log10 MAD-metric histograms with bounds ---
+    # MAD-metric histograms ----
+    # Log x axis because counts span several orders of magnitude. The dashed
+    # lines are the MAD bounds back-transformed from the log10(x+1) scale on
+    # which rule `qc` evaluates them.
     for metric in LOG_METRICS:
         vals = log10p(adata.obs[metric].to_numpy())
         lo, hi = mad_bounds(vals, n_mads)
@@ -89,7 +95,8 @@ with open(logfile, "w") as log:
         plt.close(fig)
         say(f"wrote {metric}.png (bounds [{10**lo-1:.0f}, {10**hi-1:.0f}])")
 
-    # --- mito % histogram with fixed bound ---
+    # Mito percentage histogram ----
+    # Linear x axis; the dashed line is the constant cap from config.
     fig, ax = plt.subplots(figsize=(5, 4))
     sns.histplot(adata.obs["pct_counts_mt"], bins=50, color=blues[6], kde=True, ax=ax)
     ax.axvline(max_mito, color=reds[5], linestyle="--")
@@ -102,10 +109,9 @@ with open(logfile, "w") as log:
     plt.close(fig)
     say(f"wrote pct_counts_mt.png (bound {max_mito}%)")
 
-    # --- min-counts line on a total_counts view (informational) ---
     say(f"min_counts floor = {min_counts}")
 
-    # --- doublet score distribution (post-QC, if present) ---
+    # Doublet score histogram ----
     if qcd is not None and "doubletdetection_doublet_score" in qcd.obs:
         fig, ax = plt.subplots(figsize=(5, 4))
         sns.histplot(qcd.obs["doubletdetection_doublet_score"], bins=50,
@@ -118,7 +124,7 @@ with open(logfile, "w") as log:
         plt.close(fig)
         say("wrote doublet_score.png")
 
-    # --- survival summary ---
+    # Survival summary ----
     if n_qcd is not None:
         frac = 100 * n_qcd / n_raw
         say(f"survival: {n_qcd}/{n_raw} cells ({frac:.1f}%) passed QC")

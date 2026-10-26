@@ -1,33 +1,35 @@
-"""Stage 02 - scVI integration + Leiden clustering, per species.
+"""scVI integration and a Leiden ladder for one species.
 
-Faithful port of integrate_and_cluster.ipynb (= Cevrim et al. Methods):
-  1. Label mito/ribo genes; split off a mito/ribo-EXCLUDED object for HVG selection.
-  2. HVG selection: seurat_v3, n_top_genes=3000, batch_key='sample', on the raw
-     counts layer, subset=True. Map HVG flags back to the full object.
-  3. Set .X to raw counts, normalize_total(1e4), log1p (for downstream DE/plots).
-  4. scVI: setup_anndata(layer=raw counts, batch_key='sample');
-     SCVI(n_layers=2, n_latent=30, gene_likelihood='nb'); train(early_stopping=True).
-     Latent -> obsm['X_scVI'] on the full object.
-  5. neighbors(k=100) on X_scVI; Leiden at many resolutions (igraph, seed 0).
-  6. UMAP on the scVI graph -> obsm['X_umap_scVI'].
+Called by rule `integrate` (02_integrate.smk) on the QC-passed object and by rule
+`reembed` (04e_reembed.smk) on the refined object. Reads the input h5ad with raw
+counts in layers[params.counts_layer] and writes data/interim/latent_{species}.h5ad
+(or final_{species}.h5ad) carrying obsm['X_scVI'], obsm['X_umap_scVI'] and one
+leiden_scVI_<res> obs column per resolution.
 
-NOTE: the notebook reads its raw counts from a layer named 'raw'. In this
-pipeline that layer is 'counts' (params.counts_layer). scVI requires raw counts.
-
-Writes data/interim/latent_{species}.h5ad.
+Follows integrate_and_cluster.ipynb and Cevrim et al. Methods: HVGs selected with
+seurat_v3 per sample on genes other than mito/ribo, scVI trained on raw counts of the
+HVG subset with sample as batch, kNN graph and Leiden on the latent, UMAP on that graph.
+The notebook read raw counts from a layer named 'raw'; in this pipeline the layer is
+'counts' and its name arrives as params.counts_layer.
 """
 import time
 import numpy as np
 import scanpy as sc
 import scvi
 
-inp = snakemake.input.h5ad            # noqa: F821
-out = snakemake.output.h5ad           # noqa: F821
-species = snakemake.wildcards.species # noqa: F821
-cfg = snakemake.config                # noqa: F821
-logfile = snakemake.log[0]            # noqa: F821
-counts_layer = snakemake.params.counts_layer  # noqa: F821  (this pipeline: 'counts')
+# Snakemake plumbing ----
 
+inp = snakemake.input.h5ad  # noqa: F821
+out = snakemake.output.h5ad  # noqa: F821
+species = snakemake.wildcards.species  # noqa: F821
+cfg = snakemake.config  # noqa: F821
+logfile = snakemake.log[0]  # noqa: F821
+counts_layer = snakemake.params.counts_layer  # noqa: F821
+
+# Parameters ----
+
+# Defaults are the values used in Cevrim et al. Methods; config['scvi'] and
+# config['leiden'] override them.
 SEED = cfg.get("seed", 0)
 scvi_cfg = cfg.get("scvi", {})
 leiden_cfg = cfg.get("leiden", {})
@@ -42,7 +44,10 @@ EXCLUDE_MITO_RIBO = scvi_cfg.get("exclude_mito_ribo", True)
 N_NEIGHBORS = leiden_cfg.get("knn", 100)
 RESOLUTIONS = scvi_cfg.get(
     "resolutions",
-    [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+    [
+        0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+        1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+    ],
 )
 
 SCVI_LATENT_KEY = "X_scVI"
@@ -50,24 +55,31 @@ SCVI_NEIGHBORS_KEY = f"neighbors_scVI_{N_NEIGHBORS}"
 SCVI_UMAP_KEY = "X_umap_scVI"
 
 
+# The log directory does not exist on a fresh checkout.
 from pathlib import Path as _Path
 _Path(logfile).parent.mkdir(parents=True, exist_ok=True)
+
 with open(logfile, "w") as log:
     def say(msg):
         print(f"[integrate:{species}] {msg}", file=log, flush=True)
 
     scvi.settings.seed = SEED
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # global seed for any call made without an explicit random_state
+
+    # Load ----
 
     adata = sc.read_h5ad(inp)
     say(f"loaded {adata.n_obs} cells x {adata.n_vars} genes")
+
     if counts_layer not in adata.layers:
         raise KeyError(
             f"counts layer '{counts_layer}' not in layers "
             f"(available: {list(adata.layers.keys())}); scVI needs raw counts"
         )
 
-    # --- 1. label mito/ribo genes (matches notebook prefix lists) ---
+    # Label mito and ribosomal genes ----
+
+    # Prefix lists cover mouse (mt-, Rps), human (MT-, RPS) and lower-case symbols.
     mito_mask = adata.var_names.str.startswith(("mt-", "Mt-", "MT-"))
     adata.var["mito"] = mito_mask
     ribo_mask = adata.var_names.str.startswith((
@@ -78,7 +90,10 @@ with open(logfile, "w") as log:
     adata.var["ribo"] = ribo_mask
     say(f"mito genes: {int(mito_mask.sum())} | ribo genes: {int(ribo_mask.sum())}")
 
-    # --- 2. HVG selection on mito/ribo-excluded genes (raw counts layer) ---
+    # HVG selection ----
+
+    # Mito and ribosomal genes are excluded from the HVG candidate pool (selection runs on a
+    # separate object; flags are copied back to the full object). seurat_v3 expects raw counts.
     if EXCLUDE_MITO_RIBO:
         adata_hvg = adata[:, (~adata.var["mito"]) & (~adata.var["ribo"])].copy()
         say(f"HVG candidate genes (mito/ribo excluded): {adata_hvg.n_vars}")
@@ -88,7 +103,7 @@ with open(logfile, "w") as log:
     sc.pp.highly_variable_genes(
         adata_hvg,
         flavor=HVG_FLAVOR,
-        layer=counts_layer,        # raw counts (notebook used layer='raw')
+        layer=counts_layer,
         batch_key=BATCH_KEY,
         n_top_genes=N_HVG,
         subset=True,
@@ -96,7 +111,7 @@ with open(logfile, "w") as log:
     say(f"selected {int(adata_hvg.var['highly_variable'].sum())} HVGs "
         f"(flavor={HVG_FLAVOR}, batch_key={BATCH_KEY})")
 
-    # map HVG info back to the full object (for provenance / downstream)
+    # HVG flags and ranks are copied to the full object; withheld genes get NaN ranks.
     adata.uns["hvg"] = adata_hvg.uns["hvg"].copy()
     hvg_names = set(adata_hvg.var_names[adata_hvg.var["highly_variable"]])
     adata.var["highly_variable"] = adata.var_names.isin(hvg_names)
@@ -107,14 +122,23 @@ with open(logfile, "w") as log:
         dict(zip(adata_hvg.var_names, adata_hvg.var["highly_variable_nbatches"]))
     )
 
-    # --- 3. set .X to raw counts, normalize + log1p (for downstream DE/plots) ---
+    # Normalized expression for downstream DE and plots ----
+
+    # .X is rebuilt from the counts layer so that it does not depend on what the
+    # upstream object held in .X.
     adata.X = adata.layers[counts_layer].copy()
-    sc.pp.normalize_total(adata, target_sum=1e4, exclude_highly_expressed=False,
-                          inplace=True)
+    sc.pp.normalize_total(
+        adata,
+        target_sum=1e4,  # counts per cell, as in the notebook
+        exclude_highly_expressed=False,
+        inplace=True,
+    )
     sc.pp.log1p(adata)
     say("set .X = log1p(normalize_total(counts, 1e4))")
 
-    # --- 4. scVI on the HVG subset (raw counts), latent -> full object ---
+    # scVI ----
+
+    # Trained on raw counts of the HVG subset; the latent is copied onto the full object.
     say("setting up scVI...")
     scvi.model.SCVI.setup_anndata(adata_hvg, layer=counts_layer, batch_key=BATCH_KEY)
     model = scvi.model.SCVI(
@@ -130,10 +154,13 @@ with open(logfile, "w") as log:
     adata.obsm[SCVI_LATENT_KEY] = model.get_latent_representation()
     say(f"latent -> obsm['{SCVI_LATENT_KEY}'] shape {adata.obsm[SCVI_LATENT_KEY].shape}")
 
-    # --- 5. neighbors on latent + Leiden at many resolutions ---
+    # Neighbors and the Leiden ladder ----
+
+    # The graph is stored under its own key so a later neighbors() call cannot overwrite it.
     say(f"computing neighbors (k={N_NEIGHBORS}) on {SCVI_LATENT_KEY}...")
     sc.pp.neighbors(adata, use_rep=SCVI_LATENT_KEY, n_neighbors=N_NEIGHBORS,
                     key_added=SCVI_NEIGHBORS_KEY)
+
     for res in RESOLUTIONS:
         key = f"leiden_scVI_{res}"
         t0 = time.time()
@@ -142,19 +169,27 @@ with open(logfile, "w") as log:
         n_clusters = adata.obs[key].nunique()
         say(f"  leiden res={res}: {n_clusters} clusters ({time.time() - t0:.1f}s)")
 
-    # --- 6. UMAP on the scVI graph ---
+    # UMAP, moved from obsm['X_umap'] to a key that names its graph ----
+
     say("computing UMAP on scVI graph...")
     sc.tl.umap(adata, neighbors_key=SCVI_NEIGHBORS_KEY)
     adata.obsm[SCVI_UMAP_KEY] = adata.obsm["X_umap"].copy()
     del adata.obsm["X_umap"]
+
+    # Write ----
 
     say(f"final: {adata.n_obs} cells, obsm={list(adata.obsm.keys())}")
     import os
     from pathlib import Path
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Existing objects under a 'migrated' directory are never overwritten.
     if out_path.exists() and "migrated" in out_path.parts:
         raise FileExistsError(f"refusing to overwrite existing object: {out}")
+
+    # Write to a temporary name and rename, so a killed job cannot leave a partial h5ad
+    # that Snakemake would treat as complete.
     tmp_path = out_path.with_name(f".{out_path.name}.{os.getpid()}.tmp.h5ad")
     adata.write_h5ad(tmp_path)
     os.replace(tmp_path, out_path)

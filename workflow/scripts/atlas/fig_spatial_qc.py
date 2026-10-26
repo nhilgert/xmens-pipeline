@@ -1,13 +1,15 @@
-"""Supplementary figure: Slide-tags positions and their spatial QC (rule 04f) in the release objects.
+"""Supplementary figure: Slide-tags positions and their spatial QC (rule spatial_qc, 04f).
 
-Panels: (a) raw positions of every section colored by QC outcome, with the exclusion regions and the
-uninduced section boundary; (b) QC outcome per 10x lane; (c) the far-from-neighbors cut per mouse
-timepoint; (d) QC outcome per cell type.
+Run by hand from the command line, as no Snakemake rule calls it. Panel a shows the raw
+positions of every section colored by QC outcome with the exclusion regions and the
+uninduced section boundary, panel b the QC outcome per 10x lane, panel c the
+far-from-neighbors cut per mouse timepoint and panel d the QC outcome per cell type.
 
 Reads only obs: the release all-cells objects (mouse, human) and the 04f mouse object
-(data/interim/qc_spatial_mouse.h5ad), whose uns['spatial_qc'] holds the parameters the QC applied.
---tables reads CSV exports of the same columns instead (written by --export-tables), for local renders.
-Writes <out>/supp_spatial_qc.{png,pdf,svg}, supp_spatial_qc.provenance.json and the plotted counts.
+(data/interim/qc_spatial_mouse.h5ad), whose uns['spatial_qc'] holds the parameters the
+QC applied. With --tables it reads CSV exports of the same columns (written by
+--export-tables) for local renders. Writes <out>/supp_spatial_qc.{png,pdf,svg},
+supp_spatial_qc.provenance.json and one CSV of the counts behind each of panels b-d.
 """
 
 import argparse
@@ -83,7 +85,7 @@ TIMEPOINT_LABELS = {
 
 SCALE_BAR_UM = 1000
 MAP_PAD = 0.04  # margin around each section, as a fraction of its larger extent
-KEPT_POINT_SIZE = 0.5  # pt^2; thousands of kept positions per section
+KEPT_POINT_SIZE = 0.5  # pt^2, small because a section holds thousands of kept positions
 
 # Duplicate positions stack exactly and crowded ones sit a few µm apart, so at map scale hundreds
 # of them would print as one dot. Blanked positions within one 50 µm grid cell (about one marker
@@ -160,8 +162,13 @@ def load_inputs(args) -> tuple[dict, dict, pd.DataFrame, dict, list]:
     if args.tables:
         release, display_names = {}, {}
         for species in TIMEPOINTS:
-            release[species] = pd.read_csv(args.tables / f"release_obs_{species}.csv.gz", index_col="barcode")
-            display_names[species] = json.loads((args.tables / f"display_names_{species}.json").read_text())
+            release[species] = pd.read_csv(
+                args.tables / f"release_obs_{species}.csv.gz",
+                index_col="barcode",
+            )
+            display_names[species] = json.loads(
+                (args.tables / f"display_names_{species}.json").read_text()
+            )
         qc_mouse = pd.read_csv(args.tables / "qc_mouse_obs.csv.gz", index_col="barcode")
         uns = json.loads((args.tables / "qc_mouse_uns_spatial_qc.json").read_text())
         sources = [
@@ -175,10 +182,18 @@ def load_inputs(args) -> tuple[dict, dict, pd.DataFrame, dict, list]:
         for species, path in objects.items():
             release[species], names = read_h5ad_obs(path, RELEASE_COLUMNS, uns_key="display_names")
             display_names[species] = plain(names)
-            sources.append(file_record(path, role=f"release object, {species}", sha256=sha256.get(path.name)))
+            sources.append(
+                file_record(
+                    path,
+                    role=f"release object, {species}",
+                    sha256=sha256.get(path.name),
+                )
+            )
         qc_mouse, uns = read_h5ad_obs(args.qc_mouse, QC_COLUMNS, uns_key="spatial_qc")
         uns = plain(uns)
-        sources.append(file_record(args.qc_mouse, role="04f output: uns['spatial_qc'] and far-step inputs"))
+        sources.append(
+            file_record(args.qc_mouse, role="04f output: uns['spatial_qc'] and far-step inputs")
+        )
         if args.manifest:
             sources.append(file_record(args.manifest, role="release manifest"))
 
@@ -193,9 +208,12 @@ def qc_parameters(uns: dict) -> dict:
     params["sections"] = json.loads(params.pop("sections_json"))
     params["thresholds_um"] = {tp: float(v) for tp, v in params["thresholds_um"].items()}
 
-    # The far-step recomputation below assumes the settings of the 2026-09-02 run.
+    # far_step() below recomputes the cut per timepoint on log1p distances; any other
+    # setting in uns means the figure would not reproduce what 04f applied.
     if params["mad_group"] != "timepoint" or not params["log_scale"]:
-        raise ValueError(f"far step pooled by {params['mad_group']!r}, log_scale={params['log_scale']}")
+        raise ValueError(
+            f"far step pooled by {params['mad_group']!r}, log_scale={params['log_scale']}"
+        )
     for rule in params["exclusions"]:
         if set(rule) - BOX_KEYS:
             raise ValueError(f"exclusion region with keys this figure cannot draw: {rule}")
@@ -213,7 +231,9 @@ def export_tables(
     directory.mkdir(parents=True, exist_ok=True)
     for species, obs in release.items():
         obs.to_csv(directory / f"release_obs_{species}.csv.gz")
-        (directory / f"display_names_{species}.json").write_text(json.dumps(display_names[species], indent=1))
+        (directory / f"display_names_{species}.json").write_text(
+            json.dumps(display_names[species], indent=1)
+        )
     qc_mouse.to_csv(directory / "qc_mouse_obs.csv.gz")
     (directory / "qc_mouse_uns_spatial_qc.json").write_text(json.dumps(uns, indent=1))
     LOG.info("Exported input tables to %s", directory)
@@ -236,13 +256,18 @@ def check_release(obs: pd.DataFrame, species: str) -> None:
     if ((reason == "kept") != has_qc).any():
         raise ValueError(f"{species}: 'kept' does not match present QC coordinates")
     for axis in ("x", "y"):
-        if not np.array_equal(obs.loc[has_qc, f"{axis}_um_qc"], obs.loc[has_qc, f"{axis}_um_dbscan"]):
+        if not np.array_equal(
+            obs.loc[has_qc, f"{axis}_um_qc"],
+            obs.loc[has_qc, f"{axis}_um_dbscan"],
+        ):
             raise ValueError(f"{species}: kept QC {axis} coordinates differ from the raw ones")
 
     # Panel c and the box outlines come from the mouse 04f object; human positions went through
     # the duplicate/crowding step only (methods, Spatial quality control).
     if species == "human" and reason.isin(["far", "boxed"]).any():
-        raise ValueError("human nuclei carry far/boxed labels; panel c and the boxes need a human 04f object")
+        raise ValueError(
+            "human nuclei carry far/boxed labels; panel c and the boxes need a human 04f object"
+        )
 
     LOG.info("%s: %s", species, reason.value_counts().reindex(REASONS, fill_value=0).to_dict())
 
@@ -282,7 +307,8 @@ def check_exclusion_regions(release_mouse: pd.DataFrame, params: dict) -> None:
     boxed_outside = int((~in_region & (reason == "boxed")).sum())
     if kept_inside or boxed_outside:
         raise ValueError(
-            f"{kept_inside} kept positions inside, {boxed_outside} boxed positions outside the regions"
+            f"{kept_inside} kept positions inside, "
+            f"{boxed_outside} boxed positions outside the regions"
         )
 
 
@@ -290,11 +316,11 @@ def check_exclusion_regions(release_mouse: pd.DataFrame, params: dict) -> None:
 
 
 def far_step(qc_mouse: pd.DataFrame, params: dict) -> tuple[pd.Series, dict]:
-    """Recompute the 04f far-step score (µm) and cut per timepoint, as atlas/spatial_qc.py does.
+    """Recompute the 04f far-step score (µm) and cut per timepoint, as spatial_qc.py does.
 
-    The score is the mean distance to the k nearest positions of the same timepoint among nuclei that
-    survived the duplicate/crowding step (lanes pooled); the cut is the median plus n_mads * mad_scale
-    MADs of log1p(score). Nuclei that were not scored get NaN.
+    The score is the mean distance to the k nearest positions of the same timepoint among
+    nuclei that survived the duplicate/crowding step (lanes pooled). The cut is the median
+    plus n_mads * mad_scale MADs of log1p(score). Nuclei that were not scored get NaN.
     """
     k = int(params["k"])
     n_mads = float(params["n_mads"]) * float(params["mad_scale"])
@@ -330,7 +356,11 @@ def check_far_step(qc_mouse: pd.DataFrame, score: pd.Series, cut: dict, params: 
 
     # uns stores the cuts rounded to 0.1 µm.
     stored = params["thresholds_um"]
-    off = {tp: (round(cut[tp], 2), stored[tp]) for tp in cut if abs(cut[tp] - stored[tp]) > 0.05 + 1e-9}
+    off = {
+        tp: (round(cut[tp], 2), stored[tp])
+        for tp in cut
+        if abs(cut[tp] - stored[tp]) > 0.05 + 1e-9  # half the rounding step, plus float slack
+    }
     if off or set(cut) != set(stored):
         raise ValueError(
             f"recomputed far cuts differ from uns thresholds_um: {off or set(cut) ^ set(stored)}"
@@ -420,7 +450,8 @@ def choose_font() -> str:
 
 
 def panel_header(fig, ax, letter: str, title: str, dx_in: float, dy_in: float = 0.16) -> None:
-    """Bold panel letter dx_in left of and dy_in above the top-left corner of `ax`, title beside it."""
+    """Bold panel letter dx_in left of and dy_in above the top-left corner of `ax`, title beside
+    it."""
     box = ax.get_position()
     x = box.x0 - dx_in / fig.get_figwidth()
     y = box.y1 + dy_in / fig.get_figheight()
@@ -585,7 +616,12 @@ def draw_section(ax, positions: pd.DataFrame, title: str, boxes: list, lines: li
     return {"exclusion_regions_drawn": n_drawn, "exclusion_regions_listed": len(boxes)}
 
 
-def draw_outcome_bars(ax, counts: pd.DataFrame, labels: list[str], headers: dict | None = None) -> None:
+def draw_outcome_bars(
+    ax,
+    counts: pd.DataFrame,
+    labels: list[str],
+    headers: dict | None = None,
+) -> None:
     """One horizontal bar per row of counts, split into QC-outcome fractions, with n at the right.
 
     headers maps a row position to a group name drawn as an unbarred, bold row label.
@@ -663,12 +699,22 @@ def draw_figure(
         wspace=0.30,
     )
     far_grid = middle_grid[1].subgridspec(2, 3, wspace=0.12, hspace=0.42)
-    bottom_grid = fig.add_gridspec(1, 2, left=0.205, right=0.945, top=0.178, bottom=0.045, wspace=0.92)
+    bottom_grid = fig.add_gridspec(
+        1,
+        2,
+        left=0.205,
+        right=0.945,
+        top=0.178,
+        bottom=0.045,
+        wspace=0.92,
+    )
 
     # Legend ----
 
     # One key for the outcome colors of every panel, plus the two map annotations.
-    handles = [Patch(color=REASON_COLORS[reason], label=REASON_LABELS[reason]) for reason in REASONS]
+    handles = [
+        Patch(color=REASON_COLORS[reason], label=REASON_LABELS[reason]) for reason in REASONS
+    ]
     handles += [
         Patch(
             fill=False,
@@ -677,7 +723,14 @@ def draw_figure(
             linewidth=0.7,
             label="Exclusion region",
         ),
-        Line2D([], [], color="0.25", linewidth=0.7, linestyle=(0, (1, 1.5)), label="Section boundary"),
+        Line2D(
+            [],
+            [],
+            color="0.25",
+            linewidth=0.7,
+            linestyle=(0, (1, 1.5)),
+            label="Section boundary",
+        ),
     ]
     fig.legend(
         handles=handles,
@@ -705,7 +758,9 @@ def draw_figure(
         for slot, timepoint in zip(slots[species], timepoints):
             ax = fig.add_subplot(slot)
             first_map.setdefault(species, ax)
-            positions = obs[(obs["timepoint"] == timepoint) & (obs["spatial_qc_reason"] != "unmapped")]
+            positions = obs[
+                (obs["timepoint"] == timepoint) & (obs["spatial_qc_reason"] != "unmapped")
+            ]
             # Exclusion regions and section lines exist for mouse only (04f ran for mouse).
             boxes, lines = [], []
             if species == "mouse":
@@ -805,7 +860,9 @@ def draw_figure(
         ax = fig.add_subplot(far_grid[i // 3, i % 3])
         far_axes.append(ax)
         dist = scored.loc[scored["timepoint"] == timepoint, "far_score"].to_numpy()
-        n_far = int((mouse.loc[mouse["timepoint"] == timepoint, "spatial_qc_reason"] == "far").sum())
+        n_far = int(
+            (mouse.loc[mouse["timepoint"] == timepoint, "spatial_qc_reason"] == "far").sum()
+        )
         if int((dist > cut[timepoint]).sum()) != n_far:
             raise ValueError(f"{timepoint}: nuclei beyond the cut do not match the 'far' labels")
 
@@ -831,7 +888,13 @@ def draw_figure(
                     linewidth=0.8,
                 )
         # The cut line stops below the corner label.
-        ax.axvline(cut[timepoint], ymax=0.8, color=REASON_COLORS["far"], linewidth=0.7, linestyle=(0, (3, 2)))
+        ax.axvline(
+            cut[timepoint],
+            ymax=0.8,
+            color=REASON_COLORS["far"],
+            linewidth=0.7,
+            linestyle=(0, (3, 2)),
+        )
 
         # Cut and number of far nuclei in the top-right corner, above the sparse tail.
         ax.text(
@@ -907,7 +970,11 @@ def draw_figure(
         unnamed = sorted(set(counts.index) - set(display_names[species]["cell_type"]))
         if unnamed:
             raise KeyError(f"{species}: no display name in uns['display_names'] for {unnamed}")
-        draw_outcome_bars(ax, counts, [display_names[species]["cell_type"][c] for c in counts.index])
+        draw_outcome_bars(
+            ax,
+            counts,
+            [display_names[species]["cell_type"][c] for c in counts.index],
+        )
 
         # An empty band above the first bar holds the reference line's label.
         overall = counts["kept"].sum() / counts.to_numpy().sum()
@@ -969,7 +1036,12 @@ def script_revision() -> dict | None:
     here = Path(__file__).resolve()
     git = ["git", "-C", str(here.parent)]
     try:
-        commit = subprocess.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+        commit = subprocess.run(
+            git + ["rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         status = subprocess.run(
             git + ["status", "--porcelain", "--", here.name],
             capture_output=True,
@@ -988,10 +1060,18 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--mouse-obj", type=Path, help="release all-cells mouse object (.h5ad)")
     parser.add_argument("--human-obj", type=Path, help="release all-cells human object (.h5ad)")
-    parser.add_argument("--qc-mouse", type=Path, help="04f output data/interim/qc_spatial_mouse.h5ad")
-    parser.add_argument("--manifest", type=Path, help="release MANIFEST.json, for the objects' sha256")
-    parser.add_argument("--tables", type=Path, help="read the CSV exports of --export-tables instead")
-    parser.add_argument("--export-tables", type=Path, help="also write the CSV exports to this directory")
+    parser.add_argument(
+        "--qc-mouse", type=Path, help="04f output data/interim/qc_spatial_mouse.h5ad"
+    )
+    parser.add_argument(
+        "--manifest", type=Path, help="release MANIFEST.json, for the objects' sha256"
+    )
+    parser.add_argument(
+        "--tables", type=Path, help="read the CSV exports of --export-tables instead"
+    )
+    parser.add_argument(
+        "--export-tables", type=Path, help="also write the CSV exports to this directory"
+    )
     parser.add_argument("--out", type=Path, required=True, help="output directory")
     parser.add_argument("--force", action="store_true", help="overwrite existing outputs")
     args = parser.parse_args()
@@ -1035,7 +1115,11 @@ def main() -> None:
     LOG.info("Wrote %s", [str(p) for p in figure_files])
 
     # Counts behind panels b-d, one CSV each.
-    all_labels = {lane: label for species_labels in labels.values() for lane, label in species_labels.items()}
+    all_labels = {
+        lane: label
+        for species_labels in labels.values()
+        for lane, label in species_labels.items()
+    }
     lane_table = summary["lanes"].copy()
     lane_table.insert(0, "lane_label", lane_table.index.map(all_labels))
     lane_table.to_csv(args.out / f"{STEM}_counts_by_lane.csv")
@@ -1054,18 +1138,20 @@ def main() -> None:
         "dpi": plt.rcParams["savefig.dpi"],
         "sources": sources,
         "note": (
-            "Raw Slide-tags positions (x_um_dbscan, y_um_dbscan) in their own unrotated frame, in which "
-            "the exclusion regions and section boundary are defined. Lanes of one timepoint share a puck "
-            "and frame and are pooled. All nuclei of the release objects are included; none are hidden, "
-            "including the embedding outliers of 2026-10-22. Human positions went through the "
-            "duplicate/crowding step only."
+            "Raw Slide-tags positions (x_um_dbscan, y_um_dbscan) in their own unrotated frame, "
+            "in which the exclusion regions and section boundary are defined. Lanes of one "
+            "timepoint share a puck and frame and are pooled. All nuclei of the release objects "
+            "are included; none are hidden, including the embedding outliers of 2026-10-22. "
+            "Human positions went through the duplicate/crowding step only."
         ),
         "qc_parameters": params,
         "far_step_recomputed": {"cut_um": cut, "reproduces_04f_far_labels": True},
         "exclusion_regions": summary["exclusion_regions"],
         "lane_labels": labels,
         "counts_by_reason": {
-            species: obs["spatial_qc_reason"].value_counts().reindex(REASONS, fill_value=0).to_dict()
+            species: (
+                obs["spatial_qc_reason"].value_counts().reindex(REASONS, fill_value=0).to_dict()
+            )
             for species, obs in release.items()
         },
     }

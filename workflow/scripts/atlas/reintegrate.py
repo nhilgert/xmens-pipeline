@@ -1,33 +1,31 @@
-"""Stage 05 - per-lineage scVI reintegration.
+"""Per-lineage scVI reintegration and Leiden ladder, rule `reintegrate_lineage` (04b).
 
-Sibling of integrate.py (stage 02): identical scVI procedure, applied to one
-lineage sub-object. "Re-integrated using previous scVI model parameters"
-(Cevrim et al. Methods) => same hyperparameters, HVGs RESELECTED on the subset, pooled (no batch_key -- see section 2 note).
-(The point of reintegrating is to capture within-lineage variation the global
-fit blurred.)
-
-Input : data/interim/lineages/{species}_{lineage}.h5ad
-          - carries layers['counts'] (raw counts; required by scVI) and obs
-            (sample, cell_barcode, timepoint, lineage) inherited from stage 02/04.
-Output: data/interim/latent_{species}_{lineage}.h5ad
-          - obsm['X_scVI'], the Leiden ladder, obsm['X_umap_scVI'].
-
-NO cell removal here. The Leiden ladder is what the later clustree fine-structure
-step consumes. Frozen stochastic checkpoint, same status as latent_{species}.
+Reads one lineage subset, data/interim/lineages/{species}_{lineage}.h5ad, with raw
+counts in layers[params.counts_layer] and writes data/interim/latent_{species}_{lineage}.h5ad
+with obsm['X_scVI'], obsm['X_umap_scVI'] and the leiden_scVI_<res> ladder the clustree
+step consumes. No cell is removed. Same scVI procedure and hyperparameters as
+integrate.py, with HVGs reselected on the subset to recover within-lineage variation
+the global fit blurred.
 """
 import time
 import numpy as np
 import scanpy as sc
 import scvi
 
-inp = snakemake.input.h5ad             # noqa: F821
-out = snakemake.output.h5ad            # noqa: F821
+# Snakemake plumbing ----
+
+inp = snakemake.input.h5ad  # noqa: F821
+out = snakemake.output.h5ad  # noqa: F821
 species = snakemake.wildcards.species  # noqa: F821
 lineage = snakemake.wildcards.lineage  # noqa: F821
-cfg = snakemake.config                 # noqa: F821
-logfile = snakemake.log[0]             # noqa: F821
-counts_layer = snakemake.params.counts_layer  # noqa: F821  ('counts')
+cfg = snakemake.config  # noqa: F821
+logfile = snakemake.log[0]  # noqa: F821
+counts_layer = snakemake.params.counts_layer  # noqa: F821
 
+# Parameters ----
+
+# Defaults are the values used in Cevrim et al. Methods; config['scvi'] and
+# config['leiden'] override them.
 SEED = cfg.get("seed", 0)
 scvi_cfg = cfg.get("scvi", {})
 leiden_cfg = cfg.get("leiden", {})
@@ -56,21 +54,24 @@ with open(logfile, "w") as log:
         print(f"[reintegrate:{species}:{lineage}] {msg}", file=log, flush=True)
 
     scvi.settings.seed = SEED
-    np.random.seed(SEED)
+    np.random.seed(SEED)  # global seed for any call made without an explicit random_state
 
     adata = sc.read_h5ad(inp)
     say(f"loaded {adata.n_obs} cells x {adata.n_vars} genes")
+
     if counts_layer not in adata.layers:
         raise KeyError(
             f"counts layer '{counts_layer}' not in layers "
             f"(available: {list(adata.layers.keys())}); scVI needs raw counts. "
             f"If the lineage subset dropped it, carry layers through the 04 apply step."
         )
+
     if adata.n_obs < N_NEIGHBORS + 1:
-        # tiny lineage (e.g. a small immune split): shrink knn so neighbors() is valid
         say(f"WARNING only {adata.n_obs} cells < knn {N_NEIGHBORS}; clamping knn")
 
-    # --- 1. label mito/ribo genes (same prefix lists as stage 02) ---
+    # Label mito and ribosomal genes ----
+
+    # Same prefix lists as integrate.py: mouse (mt-, Rps), human (MT-, RPS), lower case.
     adata.var["mito"] = adata.var_names.str.startswith(("mt-", "Mt-", "MT-"))
     adata.var["ribo"] = adata.var_names.str.startswith((
         "rps", "rpl", "mrps", "mrpl",
@@ -79,23 +80,20 @@ with open(logfile, "w") as log:
     ))
     say(f"mito {int(adata.var['mito'].sum())} | ribo {int(adata.var['ribo'].sum())}")
 
-    # --- 2. HVG reselection on this subset (mito/ribo excluded, raw counts) ---
-    # NO batch_key here (unlike stage 02). seurat_v3 fits a per-batch loess of
-    # variance vs mean; within a lineage subset some samples have only tens of
-    # cells (e.g. 35 in mouse epithelial), so the per-batch fit hits a loess
-    # singularity ("near singularities ... 0.090619") for EVERY lineage, not
-    # just small ones. HVGs are selected on the pooled subset instead. scVI
-    # still uses batch_key=sample for the integration below (setup_anndata), so
-    # batch correction is unaffected -- only which genes are fed to it. The
-    # min_cells filter drops genes too sparse in the subset for the loess.
+    # HVG reselection on the subset ----
+
+    # No batch_key here, unlike integrate.py: seurat_v3 fits a per-batch loess, and
+    # samples with only tens of cells in a lineage (35 in mouse epithelial) make it
+    # singular. HVGs come from the pooled subset; scVI below still corrects by batch.
     if EXCLUDE_MITO_RIBO:
         adata_hvg = adata[:, (~adata.var["mito"]) & (~adata.var["ribo"])].copy()
     else:
         adata_hvg = adata.copy()
-    sc.pp.filter_genes(adata_hvg, min_cells=3)
+
+    sc.pp.filter_genes(adata_hvg, min_cells=3)  # genes detected in < 3 cells are dropped
     sc.pp.highly_variable_genes(
         adata_hvg, flavor=HVG_FLAVOR, layer=counts_layer,
-        n_top_genes=N_HVG, subset=True,          # pooled: no batch_key
+        n_top_genes=N_HVG, subset=True,
     )
     say(f"reselected {int(adata_hvg.var['highly_variable'].sum())} HVGs on the "
         f"pooled subset ({adata_hvg.n_vars} genes in after min_cells=3)")
@@ -104,13 +102,19 @@ with open(logfile, "w") as log:
     hvg_names = set(adata_hvg.var_names[adata_hvg.var["highly_variable"]])
     adata.var["highly_variable"] = adata.var_names.isin(hvg_names)
 
-    # --- 3. re-derive .X = log1p(normalize_total(counts, 1e4)) from raw counts ---
+    # Normalized expression for downstream DE and plots ----
+
     adata.X = adata.layers[counts_layer].copy()
-    sc.pp.normalize_total(adata, target_sum=1e4, exclude_highly_expressed=False,
-                          inplace=True)
+    sc.pp.normalize_total(
+        adata,
+        target_sum=1e4,  # counts per cell, as in integrate.py
+        exclude_highly_expressed=False,
+        inplace=True,
+    )
     sc.pp.log1p(adata)
 
-    # --- 4. scVI on the subset's HVGs ---
+    # scVI ----
+
     scvi.model.SCVI.setup_anndata(adata_hvg, layer=counts_layer, batch_key=BATCH_KEY)
     model = scvi.model.SCVI(adata_hvg, n_layers=N_LAYERS, n_latent=N_LATENT,
                             gene_likelihood=GENE_LIKELIHOOD)
@@ -119,19 +123,24 @@ with open(logfile, "w") as log:
     t0 = time.time()
     model.train(early_stopping=True)
     say(f"  done in {time.time() - t0:.1f}s")
+
     adata.obsm[SCVI_LATENT_KEY] = model.get_latent_representation()
 
-    # --- 5. neighbors + Leiden ladder (feeds clustree later) ---
+    # Neighbors and the Leiden ladder ----
+
+    # knn is clamped so neighbors() is valid on a lineage smaller than N_NEIGHBORS.
     knn = min(N_NEIGHBORS, adata.n_obs - 1)
     sc.pp.neighbors(adata, use_rep=SCVI_LATENT_KEY, n_neighbors=knn,
                     key_added=SCVI_NEIGHBORS_KEY)
+
     for res in RESOLUTIONS:
         key = f"leiden_scVI_{res}"
         sc.tl.leiden(adata, resolution=res, random_state=SEED, flavor="igraph",
                      neighbors_key=SCVI_NEIGHBORS_KEY, key_added=key)
         say(f"  leiden res={res}: {adata.obs[key].nunique()} clusters")
 
-    # --- 6. UMAP on the scVI graph (scanpy defaults = min_dist 0.5, spread 1.0) ---
+    # UMAP with scanpy defaults (min_dist 0.5, spread 1.0), moved to a key naming its graph ----
+
     sc.tl.umap(adata, neighbors_key=SCVI_NEIGHBORS_KEY)
     adata.obsm[SCVI_UMAP_KEY] = adata.obsm.pop("X_umap")
 
