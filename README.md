@@ -52,6 +52,11 @@ table; `resources/lineage_spec.yaml` holds the resolution and marker panel per l
 map, enforced when the release objects are written. `tools/cluster_marker_table.py` recomputes the
 per-cluster marker detection fractions the notes were written from.
 
+One executed notebook per table under `notebooks/annotation/` shows the evidence each
+table was decided from: the table, the marker dot plot by cluster, QC per cluster, the
+UMAP by cluster and by label, and the EXCLUDE clusters' contamination markers
+(`tools/make_annotation_notebooks.py` writes and executes them).
+
 ## Running
 
 ```bash
