@@ -73,6 +73,13 @@ different clusters. The cluster assignments the tables refer to are committed in
 `resources/clusters/`; `python tools/check_labels_from_clusters.py data/deliverables/<release>`
 applies the tables to them and compares every nucleus with a release.
 
+The pipeline does not refit scVI by default (`scvi.retrain: false` in
+`config/config.yaml`): the fitting rules (`integrate`, `reintegrate_lineage`, `reembed`)
+are then not defined, so the clustered objects `data/interim/latent_*.h5ad` are inputs
+it reads and never rewrites, and a run re-applies the tables to those clusterings.
+`retrain: true` refits from raw counts; on a GPU other than an A40 the clusters will
+differ and the tables will no longer apply.
+
 ## Data
 
 Raw data and processed objects will be deposited at GEO (mouse) and Harvard

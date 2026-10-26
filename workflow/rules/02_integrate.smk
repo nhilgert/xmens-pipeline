@@ -12,14 +12,20 @@
 # GPU rule: profiles/slurm routes `integrate` to a GPU node (--gres=gpu:1).
 # Input is the per-species concatenated object from 01c_concat.
 
-rule integrate:
-    input:
-        h5ad="data/interim/qc_passed_{species}.h5ad",
-    output:
-        h5ad="data/interim/latent_{species}.h5ad",
-    params:
-        counts_layer="counts",          # the raw-counts layer written by 01c_concat
-    log:
-        "logs/02_integrate_{species}.log",
-    script:
-        "../scripts/atlas/integrate.py"
+# Defined only when config scvi.retrain is true. scVI fits are deterministic only
+# within one GPU class and the annotation tables refer to the July 2026 fits, so by
+# default data/interim/latent_{species}.h5ad is an input the pipeline reads,
+# never an output it rewrites.
+if config["scvi"].get("retrain", False):
+
+    rule integrate:
+        input:
+            h5ad="data/interim/qc_passed_{species}.h5ad",
+        output:
+            h5ad="data/interim/latent_{species}.h5ad",
+        params:
+            counts_layer="counts",          # the raw-counts layer written by 01c_concat
+        log:
+            "logs/02_integrate_{species}.log",
+        script:
+            "../scripts/atlas/integrate.py"

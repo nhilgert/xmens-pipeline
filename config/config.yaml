@@ -44,6 +44,7 @@ doublet:
   p_thresh: 1.0e-07
   n_top_var_genes: 3000
 scvi:
+  retrain: false             # true defines the scVI-fitting rules (02, 04b, 04e); see README
   n_hvg: 3000
   hvg_flavor: seurat_v3
   n_latent: 30
