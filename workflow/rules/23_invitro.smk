@@ -1,4 +1,4 @@
-# Stage 23 — in-vitro decidualization vs in-vivo comparison.
+# Stage 23 — stub: invitro.py exits with an error.
 rule invitro:
     input:  "data/interim/annotated_human.h5ad"
     output: "results/tables/invitro_comparison.csv"

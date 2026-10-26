@@ -5,8 +5,8 @@
 # This is the pipeline's OUTBOUND boundary: everything downstream of the spine
 # (SAMap, SCENIC, LIANA, pt-per-timepoint, the papermill notebooks) reads
 # data/deliverables/<release>/<name>.h5ad, never a hand-copied file. Cutting a
-# release is deliberate: bump config[deliverables][release], update sources,
-# then
+# release is deliberate: bump config[deliverables][release], point the sources at
+# the new objects, then
 #     snakemake --rerun-triggers mtime finalize_deliverables
 #
 # Sources are ancient(): a release is cut on purpose, never re-cut because a
@@ -53,6 +53,8 @@ rule migrate_release_vocabulary:
     script:
         "../scripts/deliverables/migrate_vocabulary.py"
 
+
+# Copies the sources into the release directory and writes the sha256 manifest.
 rule finalize_deliverables:
     input:
         sources=[ancient(p) for p in DELIV_SRC.values()],
@@ -64,10 +66,10 @@ rule finalize_deliverables:
         sources=DELIV_SRC,
         release=DELIV_REL,
         note=DELIV.get("note", ""),
-    resources:
-        mem_mb=32000,
-        runtime=120,
     log:
         f"logs/04g_finalize_deliverables_{DELIV_REL}.log",
+    resources:
+        mem_mb=32000,   # MB
+        runtime=120,    # minutes
     script:
         "../scripts/deliverables/finalize_deliverables.py"

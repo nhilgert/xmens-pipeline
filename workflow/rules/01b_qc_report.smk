@@ -4,7 +4,7 @@
 # and the POST-QC object (to report survival), and writes per-sample figures to
 # results/qc/figures/{sample}/. Mirrors the project QC notebook's plots:
 #   - total_counts, n_genes_by_counts histograms (log10) with MAD bounds
-#   - pct_counts_mt histogram with the fixed 8% bound
+#   - pct_counts_mt histogram with the 8% mito bound
 #   - doublet score distribution (if doublet calls present in the QC'd object)
 #
 # Filtering lives in 01_qc; this rule only visualizes. Runs in the same env as

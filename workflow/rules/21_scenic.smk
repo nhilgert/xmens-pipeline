@@ -1,4 +1,4 @@
-# Stage 21 — SCENIC gene regulatory networks / TF activity (per species).
+# Stage 21 — stub: scenic.py exits with an error. The SCENIC arm is 13_scenic.smk.
 rule scenic:
     input:  "data/interim/annotated_{species}.h5ad"
     output: "results/tables/scenic_{species}.csv"

@@ -1,11 +1,9 @@
-# COMPLEMENTARY to 10_samap.smk: this file is the VANILLA/RAW arm (the paper arm); 10 is the transfer arm. Both are live. (2026-09-13)
-# workflow/rules/10b_samap_raw.smk
-# =============================================================================
-# SAMap RAW-COUNTS arm — the all-timepoint ("full object") fib/dec integration
-# on RAW INTEGER COUNTS, wrapping the standalone work in
-# /n/lab_storage/.../code/samap-scvi/full_fibdec into the DAG.
+# SAMap raw-counts arm (the paper arm): the all-timepoint ("full object") fib/dec
+# integration on raw integer counts, wrapping the standalone work in
+# code/samap-scvi/full_fibdec into the DAG. Complementary to 10_samap.smk (the
+# transfer arm); both are live.
 #
-#   v2 deliverables --(samap_raw_prep, --scale raw)--> inputs_raw/{hs,mm}_fib_dec_all_raw.h5ad
+#   fib/dec deliverables --(samap_raw_prep, --scale raw)--> inputs_raw/{hs,mm}_fib_dec_all_raw.h5ad
 #     --(samap_raw_fit x3 arms)--> runs_raw/<arm>/{samap.pkl, eval.json}
 #     --(samap_raw_stain)-->       runs_raw/<arm>/staining/*.csv
 #     --(samap_raw_transferred)--> runs_raw/<arm>/samap_transferred.h5ad
@@ -13,34 +11,34 @@
 #     --(samap_raw_attach_pt)-->   runs_raw/<arm>/samap_transferred_pt.h5ad
 #     --(samap_raw_compare)-->     runs_raw/summary.csv
 #
-# INDEPENDENT of 10_samap.smk (the CP10K per-timepoint-pair paper arm): different
-# root, different scripts, different env. Nothing here reads or writes 10_samap paths.
+# Independent of 10_samap.smk (the CP10K per-timepoint-pair arm): different root,
+# different scripts, different env. Nothing here reads or writes 10_samap paths.
+# Target: samap_raw_all.
 #
-# All heavy outputs already exist under ROOT (fits 2026-09-01, stains/transfers
-# 2026-09-02), so `snakemake samap_raw_all` only builds what is missing —
-# currently the pt-attach step. Scripts are ancient() where outputs pre-exist,
-# mirroring 10_samap's "fit is expensive, don't re-fit on edit" convention.
+# The heavy outputs already exist under ROOT, so `snakemake samap_raw_all` only
+# builds what is missing. Scripts are ancient() where outputs pre-exist, mirroring
+# 10_samap's convention that an expensive fit is not redone on a script edit.
 #
-# The 2026_09_02_samap_raw_all.h5ad on netscratch is a dated DEPLOY COPY of
-# runs_raw/vanilla_raw/samap_transferred(_pt).h5ad (+ synced QC coords); deploying
-# to netscratch stays manual on purpose.
+# The dated samap_raw_all.h5ad on netscratch is a deploy copy of
+# runs_raw/vanilla_raw/samap_transferred(_pt).h5ad (plus synced QC coords);
+# deploying to netscratch stays manual on purpose.
 #
-# ENV — samap_harmony_uv (uv env on lab_storage): stock sc-samap v3 with
-# harmonypy PINNED to 0.0.10 (the >=2.0 API breaks SAMap's built-in batch_key
-# hook; see code/samap-scvi/harmonypy2-fix.patch).
+# Env: samap_harmony_uv (uv env on lab_storage), stock sc-samap v3 with harmonypy
+# pinned to 0.0.10 (the >=2.0 API breaks SAMap's built-in batch_key hook; see
+# code/samap-scvi/harmonypy2-fix.patch).
 #
-# config.yaml is NOT required — every key below has an inline default. To
+# config.yaml is not required; every key below has an inline default. To
 # override, add a block:
 #   samap_raw:
 #     root: ...          # external project root (holds inputs_raw/, runs_raw/)
-#     python: ...        # samap_harmony_uv interpreter, ABSOLUTE
+#     python: ...        # samap_harmony_uv interpreter, absolute path
 #     maps_dir: ...      # parent of hsmm/ (SAMap convention)
 #     n_iter: 3
 #     pt_h5ad: ...       # mouse object carrying pseudotime
 #     pt_col: dpt_pseudotime
 #     pt_arms: [vanilla_raw]
 # Snakefile:  include: "rules/10b_samap_raw.smk"
-# =============================================================================
+
 import re as _sr_re
 
 _SR       = config.get("samap_raw", {})
@@ -49,17 +47,17 @@ SR_PY     = _SR.get("python", "/n/lab_storage/eddy_lab/users/nhilgert/.uv/envs/s
 SR_MAPS   = _SR.get("maps_dir", "/n/lab_storage/eddy_lab/users/nhilgert/decidualization/revisions/samap_integrate/homology/hsmm_hmmer")
 SR_NITER  = _SR.get("n_iter", 3)
 
-# same v2 deliverables 10_samap reads; ancient() so the annotation DAG stays isolated
-# 2026-09-15: repointed at the finalized release (04g finalize_deliverables)
+# The same release objects 10_samap reads (cut by 04g finalize_deliverables);
+# ancient() so the annotation DAG stays isolated.
 _SR_SRC = {
     "hs": "data/deliverables/2026_09_15/Cevrim_Human_Only_Fib_Dec_Cells.h5ad",
     "mm": "data/deliverables/2026_09_15/Cevrim_XMens_Only_Fib_Dec_Cells.h5ad",
 }
 SR_PT_H5AD = _SR.get("pt_h5ad", "data/deliverables/2026_09_15/Cevrim_XMens_Only_Fib_Dec_Cells.h5ad")
 SR_PT_COL  = _SR.get("pt_col", "dpt_pseudotime")
-# pt-transfer variants (2026-09-15): suffix -> obs column. "" keeps the legacy
-# path AND column, so existing outputs are never re-pointed; new variants land in
-# sibling directories. Override in config[samap_raw][pt_variants].
+# pt-transfer variants: output-directory suffix -> obs column. "" keeps the
+# original path and column, so existing outputs are never re-pointed; other
+# variants land in sibling directories. Override in config[samap_raw][pt_variants].
 SR_PT_VARIANTS = _SR.get("pt_variants", {"": SR_PT_COL,
                                          "_noapop": "dpt_pseudotime_no_apoptotic"})
 
@@ -79,9 +77,8 @@ wildcard_constraints:
     ptsuf = "(" + "|".join(_sr_re.escape(v) for v in sorted(SR_PT_VARIANTS, key=len)) + ")",
     rawsp = "hs|mm",
 
-# -----------------------------------------------------------------------------
-# PREP — deliverable -> one all-timepoint RAW-counts SAMap input. Guards assert
-# integer values, count-scale max, variable library sizes (CV>0.05), .raw deleted.
+# Prep: deliverable -> one all-timepoint raw-counts SAMap input. Guards assert
+# integer values, count-scale max, variable library sizes (CV > 0.05), .raw deleted.
 rule samap_raw_prep:
     input:
         src    = lambda wc: ancient(_SR_SRC[wc.rawsp]),
@@ -90,11 +87,11 @@ rule samap_raw_prep:
         h5ad = f"{SR_ROOT}/inputs_raw/{{rawsp}}_fib_dec_all_raw.h5ad",
     params:
         py = SR_PY,
-    resources:
-        mem_mb  = 96000,
-        runtime = 60,
     log:
         "logs/samap_raw/prep_{rawsp}.log",
+    resources:
+        mem_mb  = 96000,   # MB
+        runtime = 60,      # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
@@ -106,8 +103,7 @@ rule samap_raw_prep:
             > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
-# FIT + EVAL — one arm: SAM per species (input scale re-verified and logged at
+# Fit and eval for one arm: SAM per species (input scale re-verified and logged at
 # load time), SAMAP stitch, then the mixing/purity/alignment evaluation.
 rule samap_raw_fit:
     input:
@@ -124,12 +120,12 @@ rule samap_raw_fit:
         minexp  = lambda wc: SR_ARMS[wc.arm][1],
         out_dir = f"{SR_ROOT}/runs_raw/{{arm}}",
         n_iter  = SR_NITER,
-    threads: 8
-    resources:
-        mem_mb  = 128000,
-        runtime = 600,
     log:
         "logs/samap_raw/fit_{arm}.log",
+    threads: 8
+    resources:
+        mem_mb  = 128000,   # MB
+        runtime = 600,      # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
@@ -143,9 +139,8 @@ rule samap_raw_fit:
             > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
-# LABEL TRANSFER — argmax connectivity-weighted vote of cross-species neighbors,
-# per cell; CSVs + spatial stain panels under runs_raw/<arm>/staining/.
+# Label transfer: argmax connectivity-weighted vote of cross-species neighbors,
+# per cell; CSVs and spatial stain panels under runs_raw/<arm>/staining/.
 rule samap_raw_stain:
     input:
         pkl    = f"{SR_ROOT}/runs_raw/{{arm}}/samap.pkl",
@@ -156,11 +151,11 @@ rule samap_raw_stain:
     params:
         py      = SR_PY,
         out_dir = f"{SR_ROOT}/runs_raw/{{arm}}/staining",
-    resources:
-        mem_mb  = 128000,
-        runtime = 120,
     log:
         "logs/samap_raw/stain_{arm}.log",
+    resources:
+        mem_mb  = 128000,   # MB
+        runtime = 120,      # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
@@ -170,9 +165,8 @@ rule samap_raw_stain:
             > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
-# EXPORT — collaborator-ready joint h5ad: stitched object + unified obs +
-# transferred labels/confidences + uns['provenance'].
+# Export: collaborator-ready joint h5ad: stitched object, unified obs,
+# transferred labels/confidences and uns['provenance'].
 rule samap_raw_transferred:
     input:
         pkl    = f"{SR_ROOT}/runs_raw/{{arm}}/samap.pkl",
@@ -184,11 +178,11 @@ rule samap_raw_transferred:
     params:
         py      = SR_PY,
         arm_dir = f"{SR_ROOT}/runs_raw/{{arm}}",
-    resources:
-        mem_mb  = 160000,
-        runtime = 120,
     log:
         "logs/samap_raw/transferred_{arm}.log",
+    resources:
+        mem_mb  = 160000,   # MB
+        runtime = 120,      # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
@@ -196,9 +190,8 @@ rule samap_raw_transferred:
         {params.py} {input.script} --arm-dir {params.arm_dir} > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
-# PT TRANSFER — mouse dpt_pseudotime -> human cells, Nadaraya-Watson over the
-# cross-species block of the stitched graph; three variants side by side.
+# Pseudotime transfer: mouse dpt_pseudotime -> human cells, Nadaraya-Watson over
+# the cross-species block of the stitched graph; one directory per variant.
 rule samap_raw_pt_transfer:
     input:
         joint  = f"{SR_ROOT}/runs_raw/{{arm}}/samap_transferred.h5ad",
@@ -211,11 +204,11 @@ rule samap_raw_pt_transfer:
         py      = SR_PY,
         pt_col  = lambda wc: SR_PT_VARIANTS[wc.ptsuf],
         out_dir = f"{SR_ROOT}/runs_raw/{{arm}}/pt_transfer{{ptsuf}}",
-    resources:
-        mem_mb  = 128000,
-        runtime = 120,
     log:
         "logs/samap_raw/pt_transfer_{arm}{ptsuf}.log",
+    resources:
+        mem_mb  = 128000,   # MB
+        runtime = 120,      # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
@@ -226,9 +219,8 @@ rule samap_raw_pt_transfer:
             > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
-# ATTACH — pt CSV -> obs columns (transferred_mm_dpt_pseudotime{,_ranknorm,
-# _ranknorm_insample,_weight}) on a NEW file; provenance updated.
+# Attach: pt CSV -> obs columns (transferred_mm_dpt_pseudotime{,_ranknorm,
+# _ranknorm_insample,_weight}) on a new file, with the provenance entry extended.
 rule samap_raw_attach_pt:
     input:
         joint  = f"{SR_ROOT}/runs_raw/{{arm}}/samap_transferred.h5ad",
@@ -238,11 +230,11 @@ rule samap_raw_attach_pt:
         h5ad = f"{SR_ROOT}/runs_raw/{{arm}}/samap_transferred_pt{{ptsuf}}.h5ad",
     params:
         py = SR_PY,
-    resources:
-        mem_mb  = 128000,
-        runtime = 90,
     log:
         "logs/samap_raw/attach_pt_{arm}{ptsuf}.log",
+    resources:
+        mem_mb  = 128000,   # MB
+        runtime = 90,       # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
@@ -252,8 +244,7 @@ rule samap_raw_attach_pt:
             > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
-# COMPARE — collate the arms' eval.json into runs_raw/summary.csv
+# Compare: collate the arms' eval.json into runs_raw/summary.csv.
 rule samap_raw_compare:
     input:
         evals  = expand(f"{SR_ROOT}/runs_raw/{{arm}}/eval.json", arm=SR_ARMS),
@@ -263,18 +254,19 @@ rule samap_raw_compare:
     params:
         py       = SR_PY,
         arm_dirs = expand(f"{SR_ROOT}/runs_raw/{{arm}}", arm=SR_ARMS),
-    resources:
-        mem_mb  = 8000,
-        runtime = 15,
     log:
         "logs/samap_raw/compare.log",
+    resources:
+        mem_mb  = 8000,   # MB
+        runtime = 15,     # minutes
     shell:
         r"""
         module load gcc/14.2.0-fasrc01
         {params.py} {input.script} {params.arm_dirs} > {log} 2>&1
         """
 
-# -----------------------------------------------------------------------------
+# Target: transferred objects for every arm, pt-attached objects for the pt arms,
+# and the arm comparison.
 rule samap_raw_all:
     input:
         expand(f"{SR_ROOT}/runs_raw/{{arm}}/samap_transferred.h5ad", arm=SR_ARMS),

@@ -1,4 +1,4 @@
-# Stage 08 — CellRank fate / probabilistic layer (on the global pseudotime).
+# Stage 08 — stub: cellrank.py exits with an error.
 rule cellrank:
     input:  "data/interim/pt/global_mouse.h5ad"
     output: "data/interim/pt/cellrank_mouse.h5ad"

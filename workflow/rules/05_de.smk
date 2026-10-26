@@ -1,4 +1,5 @@
-# Stage 05 — marker DE (Wilcoxon).
+# Stage 05 — rule de is a stub (de.py exits with an error); the implemented marker
+# tables are de_lineage_* below.
 rule de:
     input:  "data/interim/annotated_{species}.h5ad"
     output: "results/tables/markers_{species}.csv"
@@ -7,7 +8,7 @@ rule de:
 
 
 
-# ---- per-lineage marker tables (2026-09-02) ---------------------------------
+# Per-lineage marker tables ----
 # clusters : one-vs-rest on the spec resolution of the lineage latent -- the
 #            over-clustered evidence behind "all panel markers were recovered de novo".
 # subtypes : one-vs-rest on cell_subtype of the REANNOTATED object, excluded cells
@@ -15,8 +16,10 @@ rule de:
 #            Downstream of resources/annotations/{species}_{lineage}.csv, so it
 #            regenerates whenever a merge call changes.
 
-DE_TOP_N = config.get("de", {}).get("top_n", 200)
+DE_TOP_N = config.get("de", {}).get("top_n", 200)   # genes per group in the tables
 
+
+# Top-n markers per Leiden cluster of one lineage latent.
 rule de_lineage_clusters:
     input:
         h5ad="data/interim/latent_{species}_{lineage}.h5ad",
@@ -34,6 +37,7 @@ rule de_lineage_clusters:
         "../scripts/de/de_lineage.py"
 
 
+# Top-n markers per cell_subtype of one reannotated lineage object.
 rule de_lineage_subtypes:
     input:
         h5ad="data/interim/reannotated/{species}_{lineage}.h5ad",
@@ -51,6 +55,7 @@ rule de_lineage_subtypes:
         "../scripts/de/de_lineage.py"
 
 
+# Target: both marker tables for every (species, lineage) pair.
 rule de_lineages:
     input:
         [f"results/tables/de/{sp}_{lin}_{lvl}_top{DE_TOP_N}.tsv"

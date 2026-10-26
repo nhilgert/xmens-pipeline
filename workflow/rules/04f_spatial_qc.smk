@@ -22,10 +22,12 @@ SQC          = config["spatial_qc"]
 SQC_SPECIES  = [s for s in SQC.get("species", []) if s in SPECIES]
 
 
+# QC'd spatial objects for the configured species; added to rule all's input.
 def spatial_qc_targets():
     return expand("data/interim/qc_spatial_{s}.h5ad", s=SQC_SPECIES)
 
 
+# Annotated object with QC'd coordinates plus a tally of what each filter blanked.
 rule spatial_qc:
     input:
         h5ad="data/interim/annotated_{species}.h5ad",
@@ -42,6 +44,7 @@ rule spatial_qc:
         "../scripts/atlas/spatial_qc.py"
 
 
+# Target: spatial QC for every configured species.
 rule spatial_qc_all:
     input:
         spatial_qc_targets(),

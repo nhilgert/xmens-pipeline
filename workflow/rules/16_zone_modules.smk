@@ -1,17 +1,14 @@
-# workflow/rules/16_zone_modules.smk
-# =============================================================================
-# Decidual-zone modules (mouse), added 2026-10-24. Per-nucleus AUCell scores for
+# Decidual-zone modules (mouse). Per-nucleus AUCell scores for
 # the 11 uterine microenvironments of Li et al. 2022 (Biol Reprod 107:529,
 # Table 1, top 20 markers each; resources/signatures/aucell_modules_mouse.yaml),
 # and their spatial panels and subtype heatmaps.
 #
 #   zone_aucell   score one run: pySCENIC AUCell on raw counts of the release
-#                 object, fixed auc_threshold and seed, all genes ranked, only
+#                 object, a set auc_threshold and seed, all genes ranked, only
 #                 the nuclei of the run's timepoints (exact; see the script).
 #   zone_figures  render config[zone_modules][figures] from that run's table.
 #                 Spatial panels hide the embedding outliers listed in
-#                 config[zone_modules][embedding_outliers]; heatmaps keep them
-#                 (rule of 2026-10-22).
+#                 config[zone_modules][embedding_outliers]; heatmaps keep them.
 #
 # One directory per run under results/zone_aucell/<run>/ and
 # results/figures/zone_modules/<run>/. Add a run instead of editing one.
@@ -19,7 +16,7 @@
 #
 # The release object and its MANIFEST are ancient(): a new release is cut
 # deliberately (04g), never re-cut because an mtime moved.
-# =============================================================================
+
 import json
 
 ZM      = config["zone_modules"]
@@ -32,6 +29,7 @@ wildcard_constraints:
     zone_run = "|".join(ZM_RUNS),
 
 
+# AUCell score table, per-subtype means and provenance for one run.
 rule zone_aucell:
     input:
         h5ad     = ancient(ZM["h5ad"]),
@@ -51,11 +49,11 @@ rule zone_aucell:
         timepoints = lambda wc: ",".join(ZM_RUNS[wc.zone_run].get("timepoints") or []),
         outdir     = lambda wc: f"results/zone_aucell/{wc.zone_run}",
         env        = ZM_ENV,
-    threads: 8
-    resources:
-        mem_mb = 32000, runtime = 60, cpus_per_task = 8,
     log:
         "logs/zone_modules/zone_aucell_{zone_run}.log",
+    threads: 8
+    resources:
+        mem_mb = 32000, runtime = 60, cpus_per_task = 8,   # MB; minutes
     shell:
         r"""
         {params.env}
@@ -67,6 +65,7 @@ rule zone_aucell:
         """
 
 
+# Spatial panels and subtype heatmaps for one run, into one directory.
 rule zone_figures:
     input:
         scores   = "results/zone_aucell/{zone_run}/zone_aucell.csv",
@@ -81,11 +80,11 @@ rule zone_figures:
         py   = ZM["python"],
         jobs = json.dumps(ZM["figures"]),
         env  = ZM_ENV,
-    threads: 1
-    resources:
-        mem_mb = 16000, runtime = 60,
     log:
         "logs/zone_modules/zone_figures_{zone_run}.log",
+    threads: 1
+    resources:
+        mem_mb = 16000, runtime = 60,   # MB; minutes
     shell:
         r"""
         {params.env}
@@ -95,6 +94,7 @@ rule zone_figures:
         """
 
 
+# Target: scores and figures for every run.
 rule zone_modules_all:
     input:
         expand("results/zone_aucell/{zone_run}/zone_aucell.csv", zone_run=ZM_RUNS),

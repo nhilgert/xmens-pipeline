@@ -9,10 +9,13 @@
 # separate from integrate so the GPU job isn't doing file IO and so this
 # checkpoint is cached/reusable (e.g. for the colleague-comparison notebook).
 
+# QC'd per-sample objects of one species: every sample of that species in the sheet.
 def species_samples(wildcards):
     sub = samples[samples["species"] == wildcards.species]
     return [f"data/interim/qc/{s}.h5ad" for s in sub.index]
 
+
+# One concatenated object per species; the input of 02_integrate.
 rule concat:
     input:
         species_samples,

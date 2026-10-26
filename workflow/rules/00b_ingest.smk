@@ -5,8 +5,9 @@
 # joins the DBSCAN spatial coordinates from the fork's coords CSV (Source 1),
 # keeps ALL cells (coords nullable), and writes data/interim/raw/{sample}.h5ad.
 #
-# See DATA_PROVENANCE.md for why we ingest from the .h5 rather than Andy's
-# *_with_metadata.h5ad, and why coords come from Source 1 (barcode-keyed).
+# DATA_PROVENANCE.md explains why ingestion starts from the .h5 rather than the
+# collaborator's *_with_metadata.h5ad, and why coords come from Source 1
+# (barcode-keyed).
 
 rule ingest:
     input:

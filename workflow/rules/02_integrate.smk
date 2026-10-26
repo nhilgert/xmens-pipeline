@@ -1,6 +1,6 @@
 # Stage 02 - scVI integration + Leiden clustering, per species.
 #
-# Ported from integrate_and_cluster.ipynb (faithful to Cevrim et al. Methods):
+# Follows integrate_and_cluster.ipynb and the Cevrim et al. Methods:
 #   - HVG selection (seurat_v3, 3000, batch_key=sample) on mito/ribo-EXCLUDED
 #     genes, computed on the raw-counts layer
 #   - scVI (n_layers=2, n_latent=30, gene_likelihood=nb) trained on the raw
@@ -18,7 +18,7 @@ rule integrate:
     output:
         h5ad="data/interim/latent_{species}.h5ad",
     params:
-        counts_layer="counts",          # this pipeline's raw-counts layer (= notebook 'raw')
+        counts_layer="counts",          # this pipeline's raw-counts layer (the notebook's 'raw')
     log:
         "logs/02_integrate_{species}.log",
     script:

@@ -1,4 +1,4 @@
-# Stage 09 — MI pseudotime-associated genes (per species) + GAM heatmaps.
+# Stage 09 — stub: pt_genes_mi.py exits with an error. The MI arm is 11_mi_pseudotime.smk.
 rule pt_genes_mi:
     input:  "data/interim/annotated_{species}.h5ad"
     output: "results/tables/mi_{species}.csv"

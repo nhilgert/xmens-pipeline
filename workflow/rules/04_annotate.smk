@@ -11,6 +11,8 @@ import yaml as _yaml
 _SPEC = _yaml.safe_load(open("resources/lineage_spec.yaml"))
 
 
+# annotate_{species}: the annotated atlas plus one h5ad per lineage, generated from
+# config["lineages"] because the lineage set differs between species.
 for _sp, _lins in config["lineages"].items():
 
     rule:

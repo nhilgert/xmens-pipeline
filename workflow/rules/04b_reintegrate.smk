@@ -1,14 +1,12 @@
 # Stage 04b - per-lineage scVI reintegration.
 #
-# Sibling of 02_integrate: identical scVI procedure ("re-integrated using
-# previous scVI model parameters", Cevrim et al. Methods), applied to each
+# Sibling of 02_integrate: identical scVI procedure, applied to each
 # lineage sub-object written by stage 04. HVGs are RESELECTED on each subset --
 # that is the point of reintegrating, since the global fit blurs within-lineage
 # structure.
 #
-# NO cell removal here. The Methods' UMAP-kNN MAD-outlier drop is not
-# reproduced (computed on a superset; superseded by the clustree fine-structure
-# step, which consumes the Leiden ladder this rule emits).
+# No cell removal and no embedding-outlier flagging here; cluster refinement
+# uses the Leiden ladder this rule emits (04c, 98).
 #
 # GPU rule: profiles/slurm must route `reintegrate_lineage` to a GPU node the
 # same way it routes `integrate` (--gres=gpu:1). Add the rule name there.
@@ -24,6 +22,8 @@ def lineage_latents():
     return [f"data/interim/latent_{sp}_{lin}.h5ad"
             for sp, lins in LINEAGES.items() for lin in lins]
 
+
+# Per-lineage scVI latent with its Leiden ladder; consumed by 04c, 05 and 98.
 rule reintegrate_lineage:
     input:
         h5ad="data/interim/lineages/{species}_{lineage}.h5ad",

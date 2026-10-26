@@ -1,4 +1,4 @@
-# Clustree -- OFF the critical path, like 99_reports.
+# Clustree -- off the critical path (not in rule all).
 #
 #     snakemake clustree                      # every object in CLUSTREE_TARGETS
 #     snakemake results/figures/clustree/mouse_stromal.png
@@ -12,9 +12,11 @@
 
 CLUSTREE = config.get("clustree", {})
 CLUSTREE_TARGETS = CLUSTREE.get("targets", ["mouse_stromal"])
+# Leiden resolutions shown in the clustree figure.
 CLUSTREE_RANGE = CLUSTREE.get("range", {"start": 0.1, "stop": 0.8, "step": 0.1})
 
 
+# Leiden labels over the plotting resolution range, as the CSV clustree reads.
 rule clustree_export:
     input:
         h5ad="data/interim/latent_{species}_{lineage}.h5ad",
@@ -30,6 +32,7 @@ rule clustree_export:
         "../scripts/atlas/export_clustree.py"
 
 
+# The clustree figure for one lineage latent (R).
 rule clustree_plot:
     input:
         csv="results/tables/clustree/{species}_{lineage}.csv",
@@ -43,17 +46,20 @@ rule clustree_plot:
         "../scripts/clustree_plot.R"
 
 
+# Target: clustree figures for the configured objects.
 rule clustree:
     input:
         expand("results/figures/clustree/{target}.png", target=CLUSTREE_TARGETS),
 
 
-# ---- reference-free resolution diagnostics (2026-09-02) ---------------------
+# Reference-free resolution diagnostics ----
 # Stability of cluster membership across the FULL Leiden ladder stored on each
 # lineage latent (all leiden_scVI_* columns, not the clustree plotting range).
-# Backs the "deliberately over-clustered, below the churn elbow" statement in
-# Methods. Pure obs computation; runs for every lineage. No z-scores.
+# Reports whether the production resolution sits below the churn elbow (the largest
+# step in the fraction of clusters with a minor parent). Pure obs computation; runs
+# for every lineage. No z-scores.
 
+# Membership stability between adjacent resolutions for one lineage latent.
 rule ladder_stability:
     input:
         h5ad="data/interim/latent_{species}_{lineage}.h5ad",
@@ -68,6 +74,7 @@ rule ladder_stability:
         "../scripts/atlas/ladder_stability.py"
 
 
+# One table of the per-lineage stability summaries across both species.
 rule stability_summary:
     input:
         [f"results/tables/clustree/{sp}_{lin}_stability_summary.tsv"

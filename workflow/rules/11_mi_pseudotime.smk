@@ -1,8 +1,7 @@
-# workflow/rules/11_mi_pseudotime.smk
-# =============================================================================
 # Mutual information between gene expression and pseudotime, per (species, pt-key).
 #
-#   rooted pseudotime h5ad --(mi_prep)--> mi/<run>/{expr.npz, pseudotime.npy, genes.npy, manifest.json}
+#   rooted pseudotime h5ad
+#     --(mi_prep)--> mi/<run>/{expr.npz, pseudotime.npy, genes.npy, manifest.json}
 #     --(mi_worker[array 0..N-1])--> mi/<run>/results/mi_###.csv
 #       --(mi_merge)--> mi/<run>/mi_all.csv   (gene, mi, p, q)
 #
@@ -12,7 +11,7 @@
 #
 # config.yaml:
 #   mi_pseudotime:
-#     python: /n/lab_storage/eddy_lab/users/nhilgert/.uv/envs/rsc_uv/bin/python
+#     python: <rsc_uv python>
 #     n_chunks: 200
 #     perms: 1001
 #     min_counts: 10
@@ -28,7 +27,7 @@
 #         h5ad: results/.../human_fibdec_pseudotime_rooted.h5ad
 #         pt_key: palantir_pt_rtk
 # Snakefile:  include: "rules/11_mi_pseudotime.smk"
-# =============================================================================
+
 import re
 
 MI_PY       = config["mi_pseudotime"]["python"]
@@ -45,7 +44,7 @@ def _mi_ptkey(run):  return MI_RUNS[run]["pt_key"]
 wildcard_constraints:
     mi_run = "|".join(re.escape(r) for r in MI_RUNS),
 
-# ---- prep: matrices + manifest (one job per run) ----------------------------
+# Prep: expression matrix, pseudotime vector and manifest, one job per run ----
 rule mi_prep:
     input:
         h5ad   = lambda wc: _mi_h5ad(wc.mi_run),
@@ -60,10 +59,10 @@ rule mi_prep:
         pt_key  = lambda wc: _mi_ptkey(wc.mi_run),
         outdir  = lambda wc: f"{MI_ROOT}/{wc.mi_run}",
         chunks  = MI_CHUNKS, min_counts = MI_MINCOUNT, layer = MI_LAYER,
-    resources:
-        mem_mb = 48000, runtime = 60,
     log:
         "logs/mi/{mi_run}_prep.log",
+    resources:
+        mem_mb = 48000, runtime = 60,   # MB; minutes
     shell:
         r"""
         {params.py} {input.script} prep \
@@ -72,8 +71,9 @@ rule mi_prep:
             --chunks {params.chunks} --outdir {params.outdir} > {log} 2>&1
         """
 
-# ---- worker: one chunk (checkpoint fans out the array over n_chunks) ---------
-# n_chunks is fixed in config, so we can expand the chunk results directly.
+# Worker: MI plus permutation p-value for one gene chunk ----
+# n_chunks is set in config, so the chunk CSVs are enumerated directly in
+# _mi_chunk_csvs; no checkpoint is needed to fan out the array.
 rule mi_worker:
     input:
         manifest = f"{MI_ROOT}/{{mi_run}}/manifest.json",
@@ -85,11 +85,11 @@ rule mi_worker:
         outdir = lambda wc: f"{MI_ROOT}/{wc.mi_run}",
         chunk  = lambda wc: int(wc.chunk),
         perms  = MI_PERMS,
-    resources:
-        mem_mb = 16000, runtime = 240,     # MI + 1000 perms per gene is CPU-heavy
-    threads: 1
     log:
         "logs/mi/{mi_run}_worker_{chunk}.log",
+    threads: 1
+    resources:
+        mem_mb = 16000, runtime = 240,     # MB; minutes. MI + 1000 perms per gene is CPU-heavy
     shell:
         r"""
         {params.py} {input.script} worker \
@@ -100,7 +100,7 @@ rule mi_worker:
 def _mi_chunk_csvs(wc):
     return [f"{MI_ROOT}/{wc.mi_run}/results/mi_{c:03d}.csv" for c in range(MI_CHUNKS)]
 
-# ---- merge: concat + BH FDR -------------------------------------------------
+# Merge: concatenate the chunks and apply BH FDR ----
 rule mi_merge:
     input:
         chunks = _mi_chunk_csvs,
@@ -110,16 +110,16 @@ rule mi_merge:
     params:
         py     = MI_PY,
         outdir = lambda wc: f"{MI_ROOT}/{wc.mi_run}",
-    resources:
-        mem_mb = 16000, runtime = 30,
     log:
         "logs/mi/{mi_run}_merge.log",
+    resources:
+        mem_mb = 16000, runtime = 30,   # MB; minutes
     shell:
         r"""
         {params.py} {input.script} merge --outdir {params.outdir} > {log} 2>&1
         """
 
-# ---- target -----------------------------------------------------------------
+# Target: the merged table for every run.
 rule mi_all:
     input:
         expand(f"{MI_ROOT}/{{mi_run}}/mi_all.csv", mi_run=list(MI_RUNS)),

@@ -5,8 +5,8 @@
 # This is the stage-02 script pointed at a different input -- batch_key HVG works
 # again here because it's the whole tissue, not a thin lineage subset.
 #
-# NOTE: `reembed` is a GPU rule -- add it to profiles/slurm set-resources by NAME
-# (same as `integrate` and `reintegrate_lineage`).
+# `reembed` is a GPU rule: profiles/slurm set-resources must list it by name, as it
+# lists `integrate` and `reintegrate_lineage`.
 
 rule reembed:
     input:

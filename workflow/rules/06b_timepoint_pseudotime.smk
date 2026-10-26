@@ -12,6 +12,7 @@ PT_TEST_DIR = PT_CFG["test_output_dir"]
 PT_GLOBAL_CFG = {key: value for key, value in PT_CFG.items() if key != "timepoints"}
 
 
+# Seeded DPT for one timepoint, with its metrics and per-subtype pseudotime summary.
 rule compute_pseudotime:
     input:
         h5ad=PT_CFG["input_h5ad"],
@@ -31,6 +32,8 @@ rule compute_pseudotime:
         "../scripts/pseudotime/compute_pseudotime.py"
 
 
+# Root-candidate diagnostics for 3dpi only, where the root choice is ambiguous;
+# same script in diagnostic mode, so no pseudotime object is written.
 rule diagnose_3dpi_pseudotime_roots:
     input:
         h5ad=PT_CFG["input_h5ad"],

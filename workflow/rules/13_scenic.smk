@@ -1,25 +1,24 @@
-# workflow/rules/13_scenic.smk
-# =============================================================================
 # Multi-seed SCENIC: loom build -> GRNBoost2 (seed sweep) -> cisTarget -> consensus AUCell.
 #
-#   deliverable h5ad --(scenic_pooled)--> {sp}_dsc_pooled.h5ad + loom + manifest  (Stage 0a)
-#     --(scenic_sketch x SEEDS, if sketch != full)--> looms_{tag}/..._seed{S}.loom (Stage 0b)
-#     --(scenic_grn x SEEDS)--> adjacencies_seed{S}.tsv                            (Stage 1, stochastic)
-#       --(scenic_ctx x SEEDS)--> regulons_seed{S}.pkl                             (Stage 2, deterministic)
-#         --(scenic_consensus)--> consensus_{tag}_{mode}/  (regulons + AUCell)     (Stage 3, deterministic)
+#   deliverable h5ad --(scenic_pooled)--> {sp}_dsc_pooled.h5ad + loom + manifest  (stage 0a)
+#     --(scenic_sketch x SEEDS, sketch lanes only)--> looms_{tag}/..._seed{S}.loom  (stage 0b)
+#     --(scenic_grn x SEEDS)--> adjacencies_seed{S}.tsv                 (stage 1, stochastic)
+#       --(scenic_ctx x SEEDS)--> regulons_seed{S}.pkl                  (stage 2, deterministic)
+#         --(scenic_consensus)--> consensus_{tag}_{mode}/ (regulons + AUCell)  (stage 3)
 #
-# Stages 1-3 wrap the existing scripts under {rev}/scripts/ (grn_only.py / ctx_only.py /
-# build_consensus_aucell.py) UNCHANGED -- they are idempotent + atomic, which composes
-# cleanly with snakemake retries. Stage 0 is workflow/scripts/scenic/scenic_make_loom.py, a script
-# port of {rev}/scripts/prep_fib_inputs.ipynb (2026-09-07) so the loom is no longer an
-# ancient() hand-made input.
+# Reads the fib/dec deliverable per species (config scenic.source_h5ad) and the
+# TF lists and cisTarget databases under {rev}/databases/; writes everything
+# under {rev}/scenic_seeds/<species>/. Target: scenic_all.
 #
-# 2026-09-07 changes:
-#   * Stage 0 rule added; source h5ad per species comes from config (scenic.source_h5ad).
-#   * consensus paths use SCENIC_TAG ("full" | "sketch15k"), mirroring lane_tag() in
-#     build_consensus_aucell.py. The previous f"consensus_{SCENIC_SKETCH}_..." produced
-#     consensus_15k_... which the script never writes (MissingOutputException).
-#   * optional --timepoint-col forwarded to build_consensus_aucell.py (scenic.timepoint_col).
+# Stages 1-3 call the scripts under {rev}/scripts/ (grn_only.py / ctx_only.py /
+# build_consensus_aucell.py) as they are; they are idempotent and atomic, which
+# composes with snakemake retries. Stage 0 is workflow/scripts/scenic/scenic_make_loom.py,
+# a script version of {rev}/scripts/prep_fib_inputs.ipynb, so the loom is built in the
+# DAG rather than taken as an ancient() hand-made input.
+#
+# The consensus output paths use SCENIC_TAG ("full" | "sketch15k"), which must match
+# lane_tag() in build_consensus_aucell.py; any other naming declares outputs the
+# script never writes (MissingOutputException).
 #
 # config.yaml:
 #   scenic:
@@ -34,8 +33,8 @@
 #     raw_layer:  counts                           # layer holding raw counts
 #     timepoint_col: timepoint                     # obs column for auc_by_timepoint.tsv (optional)
 #     sketch_per_seed: true                        # new geosketch per GRN seed (default true)
-#     sketch_seed: 0                               # shared-sketch seed when sketch_per_seed is false
-# =============================================================================
+#     sketch_seed: 0                               # shared-sketch seed (sketch_per_seed false)
+
 import re
 SCENIC_PY    = config["scenic"]["python"]
 SCENIC_REV   = config["scenic"]["rev"]
@@ -50,15 +49,17 @@ SCENIC_TP_COL  = config["scenic"].get("timepoint_col", None)
 SCENIC_CT_COL  = config["scenic"].get("celltype_col", None)   # optional, loom-log composition table
 # lane tag exactly as build_consensus_aucell.py::lane_tag()
 SCENIC_TAG     = "full" if SCENIC_SKETCH == "full" else f"sketch{SCENIC_SKETCH}"
-# geosketch size for the loom rule (0 = full object)
+# geosketch size in cells for the loom rule (0 = full object)
 if SCENIC_SKETCH != "full" and not re.fullmatch(r"[0-9]+(\.[0-9]+)?k", SCENIC_SKETCH):
     raise ValueError(f"scenic.sketch must be 'full' or '<N>k' (e.g. 15k), got {SCENIC_SKETCH!r}")
 SCENIC_SKETCH_N = 0 if SCENIC_SKETCH == "full" else int(float(SCENIC_SKETCH.rstrip("k")) * 1000)
-# GRNBoost2 walltime scales with cells: 15k sketch ~7 h/seed, full (43-48k cells) 9-24 h/seed
+# GRNBoost2 walltime (minutes) scales with cells: 15k sketch ~7 h/seed, full
+# (43-48k cells) 9-24 h/seed
 SCENIC_GRN_RUNTIME = 4320 if SCENIC_TAG == "full" else 720
 
 SCENIC_PER_SEED = bool(config["scenic"].get("sketch_per_seed", True)) and SCENIC_TAG != "full"
-SCENIC_SKETCH_SEED = int(config["scenic"].get("sketch_seed", 0))   # only used when sketch_per_seed is false
+# SCENIC_SKETCH_SEED is only used when sketch_per_seed is false.
+SCENIC_SKETCH_SEED = int(config["scenic"].get("sketch_seed", 0))
 
 def _sc_root(sp):   return f"{SCENIC_REV}/scenic_seeds/{sp}"
 def _sc_pooled_loom(sp):     return f"{_sc_root(sp)}/{sp}_dsc_pooled.loom"
@@ -83,7 +84,7 @@ wildcard_constraints:
     sc_species = "|".join(SCENIC_SPECIES),
     sc_seed    = "|".join(str(s) for s in SCENIC_SEEDS),
 
-# ---- Stage 0a: deliverable h5ad -> pooled h5ad (AUCell) + pooled loom + manifest ----
+# Pooled h5ad (for AUCell), pooled loom and manifest per species (stage 0a) ----
 # Runs once per species. The pooled loom is the GRN input only when sketch == full.
 rule scenic_pooled:
     input:
@@ -98,11 +99,11 @@ rule scenic_pooled:
         py = SCENIC_PY, raw = SCENIC_RAW,
         out_dir = lambda wc: _sc_root(wc.sc_species),
         ct = (f"--celltype-col {SCENIC_CT_COL}" if SCENIC_CT_COL else ""),
-    threads: 4
-    resources:
-        mem_mb = 64000, runtime = 120,
     log:
         "logs/scenic/pooled_{sc_species}.log",
+    threads: 4
+    resources:
+        mem_mb = 64000, runtime = 120,   # MB; minutes
     shell:
         r"""
         {params.py} {input.script} \
@@ -113,11 +114,12 @@ rule scenic_pooled:
             > {log} 2>&1
         """
 
-# ---- Stage 0b: geosketch of the pooled object -> GRN loom ---------------------
+# Geosketch of the pooled object as the GRN loom (stage 0b) ----
 # sketch_per_seed: true  -> one sketch per GRN seed (sketch_seed = GRN seed), so the seed
 #                           ensemble bootstraps over cells as well as over boosting randomness.
-# sketch_per_seed: false -> one shared sketch (sketch_seed from config), as in the June 2026 lane.
+# sketch_per_seed: false -> one shared sketch (sketch_seed from config).
 if SCENIC_TAG != "full":
+    # Only defined for a sketch lane; the full lane trains on the pooled loom.
     rule scenic_sketch:
         input:
             h5ad   = _sc_pooled_h5ad("{sc_species}"),
@@ -131,12 +133,12 @@ if SCENIC_TAG != "full":
             sketch_seed = lambda wc: getattr(wc, "sc_seed", SCENIC_SKETCH_SEED),
             out_dir = lambda wc: _sc_root(wc.sc_species),
             ct = (f"--celltype-col {SCENIC_CT_COL}" if SCENIC_CT_COL else ""),
-        threads: 2
-        resources:
-            mem_mb = 32000, runtime = 45,
         log:
             (f"logs/scenic/sketch_{{sc_species}}_seed{{sc_seed}}.log" if SCENIC_PER_SEED
              else "logs/scenic/sketch_{sc_species}.log"),
+        threads: 2
+        resources:
+            mem_mb = 32000, runtime = 45,   # MB; minutes
         shell:
             r"""
             {params.py} {input.script} \
@@ -147,7 +149,7 @@ if SCENIC_TAG != "full":
                 > {log} 2>&1
             """
 
-# ---- Stage 1: seeded GRNBoost2 (the only stochastic stage) -------------------
+# Seeded GRNBoost2 adjacencies (stage 1, stochastic) ----
 rule scenic_grn:
     input:
         loom   = lambda wc: _sc_loom(wc.sc_species, wc.sc_seed),
@@ -157,11 +159,11 @@ rule scenic_grn:
         adj = _sc_adj_dir("{sc_species}") + "/adjacencies_seed{sc_seed}.tsv",
     params:
         py = SCENIC_PY,
-    threads: 16
-    resources:
-        mem_mb = 64000, runtime = SCENIC_GRN_RUNTIME,
     log:
         "logs/scenic/grn_{sc_species}_seed{sc_seed}.log",
+    threads: 16
+    resources:
+        mem_mb = 64000, runtime = SCENIC_GRN_RUNTIME,   # MB; minutes
     shell:
         r"""
         {params.py} {input.script} \
@@ -170,7 +172,7 @@ rule scenic_grn:
             --n-cpu {threads} > {log} 2>&1
         """
 
-# ---- Stage 2: cisTarget (deterministic; memory-heavy) ------------------------
+# cisTarget regulons per seed (stage 2; deterministic, memory-heavy) ----
 rule scenic_ctx:
     input:
         adj    = _sc_adj_dir("{sc_species}") + "/adjacencies_seed{sc_seed}.tsv",
@@ -181,11 +183,11 @@ rule scenic_ctx:
     params:
         py     = SCENIC_PY,
         db_dir = f"{SCENIC_REV}/databases",
-    threads: 8
-    resources:
-        mem_mb = 96000, runtime = 480,
     log:
         "logs/scenic/ctx_{sc_species}_seed{sc_seed}.log",
+    threads: 8
+    resources:
+        mem_mb = 96000, runtime = 480,   # MB; minutes
     shell:
         r"""
         {params.py} {input.script} \
@@ -194,7 +196,7 @@ rule scenic_ctx:
             --out {output.pkl} --n-cpu {threads} > {log} 2>&1
         """
 
-# ---- Stage 3: consensus + AUCell (gathers all seeds) --------------------------
+# Consensus regulons and AUCell over all seeds (stage 3) ----
 rule scenic_consensus:
     input:
         pkls = lambda wc: [_sc_reg_dir(wc.sc_species) + f"/regulons_seed{s}.pkl"
@@ -202,18 +204,19 @@ rule scenic_consensus:
         h5ad   = _sc_pooled_h5ad("{sc_species}"),
         script = f"{SCENIC_REV}/scripts/build_consensus_aucell.py",
     output:
-        # build_consensus_aucell.py writes consensus_{lane_tag}_{mode}/ under {rev}/scenic_seeds/{sp};
-        # deliverables are the AUCell matrix and the pickled consensus regulons
+        # build_consensus_aucell.py writes consensus_{lane_tag}_{mode}/ under
+        # {rev}/scenic_seeds/{sp}; the deliverables are the AUCell matrix and the
+        # pickled consensus regulons
         auc  = _sc_cons_dir("{sc_species}") + "/auc_mtx.csv",
         pkl  = _sc_cons_dir("{sc_species}") + "/consensus_regulons.pkl",
     params:
         py = SCENIC_PY, sketch = SCENIC_SKETCH, mode = SCENIC_MODE, rev = SCENIC_REV,
         tp = (f"--timepoint-col {SCENIC_TP_COL}" if SCENIC_TP_COL else ""),
-    threads: 8
-    resources:
-        mem_mb = 128000, runtime = 240,
     log:
         "logs/scenic/consensus_{sc_species}.log",
+    threads: 8
+    resources:
+        mem_mb = 128000, runtime = 240,   # MB; minutes
     shell:
         r"""
         {params.py} {input.script} \
@@ -222,6 +225,8 @@ rule scenic_consensus:
             --n-cpu {threads} > {log} 2>&1
         """
 
+
+# Target: the consensus AUCell matrix for every species.
 rule scenic_all:
     input:
         expand(_sc_cons_dir("{sp}") + "/auc_mtx.csv", sp=SCENIC_SPECIES),

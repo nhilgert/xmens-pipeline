@@ -11,6 +11,7 @@ def LINEAGE_RES(species, lineage):
     return lin.get("res", _SPEC.get("defaults", {}).get("res", "leiden_scVI_2.0"))
 
 
+# Per-lineage object with the committed subtype labels; the input of 04d_merge.
 rule reannotate_lineage:
     input:
         h5ad="data/interim/latent_{species}_{lineage}.h5ad",
