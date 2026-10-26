@@ -47,7 +47,8 @@ def resolution(species, level):
 
 def exclude_note(species, level, cluster):
     row, reference = qc.loc[(species, level, cluster)], qc.loc[(species, level, "ALL")]
-    panels = [c for c in qc.columns if c.startswith("frac_pos_")]
+    # The QC table holds both species' lineage panels; a panel of the other species is NaN.
+    panels = [c for c in qc.columns if c.startswith("frac_pos_") and pd.notna(row[c])]
     strongest = sorted(panels, key=lambda c: -row[c])[:3]
     foreign = ", ".join(f"{c[len('frac_pos_'):]} {row[c]:.2f}" for c in strongest)
     return (f"EXCLUDE: doublet score med {row.doubletdetection_doublet_score:.2f} "
