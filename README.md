@@ -68,9 +68,10 @@ snakemake --profile profiles/slurm       # full run on SLURM
 
 Paths in `config/config.yaml` point at the authors' cluster and must be edited for
 another site. scVI training is deterministic for a fixed seed only within one GPU
-class (the released clusterings were made on NVIDIA A40s); the cluster assignments
-and annotation tables are deposited with the data, so labels do not depend on
-retraining.
+class (the released clusterings were made on NVIDIA A40s), so a retrain elsewhere gives
+different clusters. The cluster assignments the tables refer to are committed in
+`resources/clusters/`; `python tools/check_labels_from_clusters.py data/deliverables/<release>`
+applies the tables to them and compares every nucleus with a release.
 
 ## Data
 
