@@ -1,10 +1,9 @@
-#!/usr/bin/env python
-"""samap_attach_pt.py — join a transfer_pt CSV into a joint SAMap h5ad as obs columns.
+"""Join a transferred-pseudotime CSV into a joint SAMap h5ad as obs columns.
 
-Pipeline port of full_fibdec/attach_pt_0902.py: same columns and provenance, but
-parameterized and writing a NEW file (no in-place mutation), so it can be a rule output.
+Reads the joint samap_transferred.h5ad (--joint) and pt_transferred_hs.csv from
+samap_transfer_pt.py (--pt-csv) and writes a new h5ad (--out) with four added
+obs columns. Called by rule samap_raw_attach_pt (workflow/rules/10b_samap_raw.smk).
 
-Input CSV (from samap_transfer_pt.py): cell, pt_raw, weight, pt_ranknorm, pt_ranknorm_insample
 New obs columns (NaN on mouse cells, matching the transferred_* label columns):
   {prefix}                     <- pt_raw
   {prefix}_ranknorm            <- pt_ranknorm
@@ -32,7 +31,11 @@ def log(m):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--joint", required=True, help="joint samap_transferred.h5ad")
-    p.add_argument("--pt-csv", required=True, help="pt_transferred_hs.csv from samap_transfer_pt.py")
+    p.add_argument(
+        "--pt-csv",
+        required=True,
+        help="pt_transferred_hs.csv from samap_transfer_pt.py",
+    )
     p.add_argument("--prefix", default="transferred_mm_dpt_pseudotime")
     p.add_argument("--out", required=True)
     args = p.parse_args()
@@ -44,6 +47,7 @@ def main():
         "weight": f"{args.prefix}_weight",
     }
 
+    # Load inputs ----
     df = pd.read_csv(args.pt_csv).set_index("cell")
     assert df.index.is_unique, "duplicate cell barcodes in the pt CSV"
     log(f"CSV: {len(df):,} cells, columns {list(df.columns)}")
@@ -55,20 +59,24 @@ def main():
     for new in colmap.values():
         assert new not in a.obs.columns, f"{new} already present — refusing to clobber"
 
+    # Attach the columns ----
     hs_mask = a.obs["species"].astype(str).values == "hs"
     n_hs = int(hs_mask.sum())
 
     for src, new in colmap.items():
         v = pd.to_numeric(df[src], errors="coerce").reindex(a.obs_names)
-        # transfers are defined on human cells only; anything landing on a
-        # mouse barcode would mean a barcode collision
+
+        # Transfers are defined on human cells only; a value landing on a mouse
+        # barcode would mean a barcode collision between species.
         on_mm = int(v.notna()[~hs_mask].sum())
         assert on_mm == 0, f"{on_mm} values joined onto MOUSE cells for {src}"
+
         a.obs[new] = v.values.astype(float)
         got = int(v.notna().sum())
         log(f"  {new}: {got:,}/{n_hs:,} human cells "
             f"({got / n_hs:.2%}), median {np.nanmedian(v.values):.4f}")
 
+    # Provenance ----
     prov = json.loads(a.uns.get("provenance", "{}"))
     prov["pt_transfer"] = {
         "attached": datetime.now().isoformat(),
@@ -85,6 +93,8 @@ def main():
     }
     a.uns["provenance"] = json.dumps(prov)
 
+    # Write ----
+    # Write to a temp path and rename so a crash never leaves a truncated h5ad.
     tmp = str(args.out) + ".tmp"
     log(f"writing {args.out} ...")
     a.write_h5ad(tmp)

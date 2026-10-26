@@ -1,19 +1,15 @@
-#!/usr/bin/env python
-"""prep_full_input.py — build ONE full (all-timepoint) SAMap input from a deliverable.
+"""Build one full (all-timepoint) SAMap input h5ad from a fib/dec deliverable.
 
-Standalone sibling of the pipeline's prep_samap_input.py, differing in three ways:
-  * NO timepoint subset — the whole multisample object goes in ("all by all")
-  * obsm is carried through untouched (the scVI-arm latents ride along)
-  * no lognorm layer copy (saves ~2-3 GB per object in the SAM fit)
+Reads the per-species deliverable h5ad (--src) and writes
+inputs_raw/{sp}_fib_dec_all_<scale>.h5ad with either CP10K or raw integer
+counts in .X, the shared SAMap annotation columns in obs, obsm carried through,
+and no layers or .raw. Called by rule samap_raw_prep (workflow/rules/10b_samap_raw.smk).
 
-Everything else follows the pipeline prep exactly:
-  * fib/dec subset on the coarse column (a no-op assertion on these deliverables)
-  * shared SAMap schema: cell_type_annotations / cell_subtype_annotations
-  * CP10K (library-size normalized to 1e4, NOT logged) into .X from the counts layer
-  * .raw deleted — CRITICAL: sc-samap's load_data uses .raw.X as the source matrix
-    when .raw exists (and discards .X), so leaving .raw in place would silently
-    flip SAMap back onto raw counts.
-  * scale guards: row sums == 1e4, .X max > 20 (blocks pre-logged matrices)
+Sibling of prep_samap_input.py that keeps every timepoint ("all by all"),
+carries obsm untouched (the scVI-arm latents ride along) and drops the lognorm
+layer copy. .raw is deleted because
+sc-samap's load_data uses .raw.X as the source matrix when .raw exists and
+discards .X, which would silently flip SAMap back onto raw counts.
 """
 
 from __future__ import annotations
@@ -25,7 +21,7 @@ import numpy as np
 import scipy.sparse as sp
 
 FIBDEC = {"decidual_cell", "endometrial_fibroblast"}
-TARGET_SUM = 1e4
+TARGET_SUM = 1e4  # CP10K: counts per 10,000 per cell
 
 
 def main() -> None:
@@ -42,6 +38,7 @@ def main() -> None:
     p.add_argument("--out", required=True)
     args = p.parse_args()
 
+    # Load the deliverable ----
     print(f"Loading {args.src} ...", flush=True)
     a = ad.read_h5ad(args.src)
     print(f"  {a.shape}; obs columns: {list(a.obs.columns)}")
@@ -52,7 +49,9 @@ def main() -> None:
         if col not in a.obs.columns:
             raise SystemExit(f"obs column {col!r} not present. Have: {list(a.obs.columns)}")
 
-    # --- fib/dec subset (expected no-op on the *_Only_Fib_Dec_Cells deliverables) ---
+    # Subset to fib/dec ----
+    # The *_Only_Fib_Dec_Cells deliverables are already fib/dec only, so this is
+    # an assertion in practice.
     keep = a.obs[args.coarse_col].astype(str).isin(FIBDEC).values
     if keep.sum() < a.n_obs:
         print(f"  WARNING: {a.n_obs - keep.sum()} non-fib/dec cells dropped")
@@ -61,30 +60,35 @@ def main() -> None:
     print(f"  samples: {sorted(a.obs['sample'].astype(str).unique())}")
     print(f"  timepoints: {sorted(a.obs['timepoint'].astype(str).unique())}")
 
-    # --- shared SAMap schema ---------------------------------------------------------
+    # Shared SAMap annotation schema ----
     obs = a.obs.copy()
     obs["cell_type_annotations"] = obs[args.coarse_col].astype(str)
     obs["cell_subtype_annotations"] = obs[args.fine_col].astype(str)
     a.obs = obs
 
-    # --- CP10K into .X from the counts layer -----------------------------------------
+    # Counts layer into .X, CP10K-scaled or raw ----
     if args.counts_layer not in a.layers:
         raise SystemExit(
             f"source has no {args.counts_layer!r} layer. Layers: {list(a.layers)}"
         )
     counts = a.layers[args.counts_layer]
+
+    # A log-normalized matrix mislabeled as counts would be silently renormalized,
+    # so the first 500 cells must be integer-valued with a count-sized maximum.
     _c = counts[:500]
     _c = _c.toarray() if sp.issparse(_c) else np.asarray(_c)
     assert np.allclose(_c, np.round(_c)) and _c.max() > 50, (
         f"{args.counts_layer!r} does not look like raw counts "
         f"(max={_c.max():.2f}, integer={np.allclose(_c, np.round(_c))})."
     )
+
     counts = (
         sp.csr_matrix(counts, dtype="float32")
         if sp.issparse(counts)
         else sp.csr_matrix(np.asarray(counts, dtype="float32"))
     )
     rowsum = np.asarray(counts.sum(1)).ravel()
+
     n_empty = int((rowsum == 0).sum())
     if n_empty:
         raise SystemExit(f"{n_empty} cells have zero total counts")
@@ -94,14 +98,14 @@ def main() -> None:
     else:
         a.X = counts  # untouched integer counts
 
-    # drop everything heavy we don't need in the fit
+    # Layers and .raw only add memory to the fit, and .raw would override .X in SAMap.
     for lay in list(a.layers.keys()):
         del a.layers[lay]
     if a.raw is not None:
         del a.raw
     print(f"  .X <- {args.scale.upper()}; layers dropped; .raw deleted")
 
-    # --- scale guards ------------------------------------------------------------------
+    # Scale guards ----
     rs = np.asarray(a.X.sum(1)).ravel()
     _xs = a.X[:2000]
     _xs = _xs.toarray() if sp.issparse(_xs) else np.asarray(_xs)
@@ -113,11 +117,12 @@ def main() -> None:
             f"CP10K guard: row sums not {TARGET_SUM:.0f} "
             f"(min={rs.min():.2f}, max={rs.max():.2f})"
         )
+        # A log1p matrix tops out around 10; CP10K maxima are in the hundreds.
         assert xmax > 20, f"CP10K guard: .X max {xmax:.3f} looks LOG-scaled"
         print(f"  guard OK: row sums == {TARGET_SUM:.0f}, .X max = {xmax:.1f}")
     else:
-        # RAW guards: integer-valued, count-magnitude, and VARIABLE library sizes
-        # (a pre-normalized matrix would have CV≈0 and would fail here).
+        # Raw counts are integer-valued, count-sized, and have variable library
+        # sizes; a pre-normalized matrix would have CV ~ 0 and fail here.
         assert np.allclose(_xs, np.round(_xs)), (
             "RAW guard: .X is not integer-valued — this is not raw counts"
         )
@@ -131,6 +136,7 @@ def main() -> None:
               f"library sizes median={np.median(rs):.0f}, CV={cv:.3f} "
               f"(variable, as counts must be)")
 
+    # Record the scale choice in the object so a reader does not have to infer it.
     a.uns["samap_input_scale"] = args.scale.upper()
     a.uns["samap_input_note"] = (
         f"full all-timepoint fib/dec input for species {args.species}; "
@@ -141,6 +147,8 @@ def main() -> None:
         + "; obsm carried through for the scVI slot-1 arm."
     )
 
+    # Write ----
+    # Write to a temp path and rename so a crash never leaves a truncated h5ad.
     from pathlib import Path
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

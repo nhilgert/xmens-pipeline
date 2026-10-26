@@ -1,9 +1,10 @@
-"""STUB — intentionally disabled (2026-09-01 cleanup).
+"""Stub for rule crossspecies in workflow/rules/22_crossspecies.smk.
 
-This scaffold stage was never implemented; the real analyses live in the
-numbered arms (10_samap ... 15_pt_per_timepoint). This stub previously
-`touch`ed its declared outputs, which could fabricate empty result files
-(e.g. results/tables/mi_*.csv). It now fails loudly instead.
+Reads nothing and writes nothing: it exits with an error. This scaffold stage
+was never implemented. The cross-species analyses that exist are the SAMap arms
+(10_samap.smk, 10b_samap_raw.smk) and the standalone crossspecies/fig3d_conservation.py.
+Touching the declared outputs would
+fabricate empty result files, so the rule fails loudly instead.
 """
 import sys
 

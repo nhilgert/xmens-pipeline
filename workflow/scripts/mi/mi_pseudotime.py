@@ -1,54 +1,29 @@
-#!/usr/bin/env python3
-"""
-mi_pseudotime.py — mutual information between gene expression and pseudotime.
+"""Mutual information between each gene's expression and pseudotime.
 
-Cleaned, pipeline-ready rewrite of mi_batch/scripts/mi_pipeline_*.py. Same method
-(sklearn mutual_info_regression + permutation null + BH FDR), but:
-
-  * the pseudotime column is a PARAMETER (--pt-key), so it runs against any of the
-    new Palantir pseudotimes (palantir_pt_rtk, palantir_pt_std) or DPT
-    (dpt_pseudotime) without editing code;
-  * prep / worker / merge share ONE contract — worker reads prep's matrices, it does
-    NOT re-open the h5ad or re-chunk with a different count (the original silently did
-    both, so a prep with --chunks 200 was ignored by a worker hardcoded to 500);
-  * everything is CLI-driven with deterministic paths, so a Snakemake rule can wire
-    prep -> worker[array] -> merge with no hidden state;
-  * MI calls take an explicit random_state, so a rerun reproduces the numbers
-    (mutual_info_regression uses a kNN estimator with random tie-breaking — without a
-    fixed seed the observed MI and the null both wander between runs).
+Called by rules `mi_prep`, `mi_worker` and `mi_merge` (11_mi_pseudotime.smk), one
+sub-command each. Method: sklearn mutual_info_regression (kNN/KSG estimator) per gene,
+a permutation null from shuffled pseudotime, one-sided empirical p and
+Benjamini-Hochberg q across genes.
 
 Sub-commands
-------------
-  prep     read h5ad -> filter genes -> write expr matrix, pseudotime vector(s),
-           gene list, and a chunk manifest.  Run once per (dataset, pt-key).
-  worker   one SLURM array task: load prep outputs, take one chunk's genes, compute
-           MI(gene, pseudotime) + N permutations, write results/mi_<chunk>.csv.
-  merge    concat per-chunk CSVs -> Benjamini-Hochberg q -> mi_all.csv (sorted by q).
-  diff     OPTIONAL: given two merged mi_all.csv (e.g. two conditions or two pt-keys),
-           compute delta-MI per shared gene with a combined permutation z-score.
-           This is the "differential MI" comparison the original suite did by hand.
+  prep     read the h5ad, filter genes, write expr.npz (cells x genes, float32),
+           pseudotime.npy, genes.npy and manifest.json under --outdir.
+  worker   one array task: load prep's matrices, take one chunk of genes, compute
+           MI(gene, pseudotime) plus permutations, write results/mi_<chunk>.csv.
+  merge    concatenate the chunk CSVs, add BH q, write mi_all.csv sorted by q.
+  diff     not wired into the pipeline: delta-MI per shared gene between two
+           mi_all.csv files.
 
-Layout produced under --outdir
-------------------------------
-  expr.npz            float32 dense expression matrix  (cells x genes_kept)
-  pseudotime.npy      1-D pseudotime vector aligned to rows of expr
-  genes.npy           gene names aligned to columns of expr
-  manifest.json       {pt_key, n_cells, n_genes, n_chunks, min_counts, layer, seed}
-  results/mi_###.csv  per-chunk: gene, mi, p  (+ null columns if --keep-null)
-  mi_all.csv          merged, with q
+The worker reads the chunk count and the power settings (perms, subsample_cells)
+from the manifest, so prep and worker can never disagree on the chunking. Every
+MI call takes an explicit random_state: the kNN estimator breaks ties at random,
+and without a seed both the observed MI and the null drift between runs.
 
-Example (matches how the Snakemake rule below drives it)
---------------------------------------------------------
-  python mi_pseudotime.py prep \
-      --h5ad results/.../mouse_fibdec_pseudotime_rooted.h5ad \
-      --pt-key palantir_pt_rtk --layer log1p --min-counts 10 \
-      --chunks 200 --outdir results/mi/mouse_palantir_rtk
-
-  # SLURM array 0-199
-  python mi_pseudotime.py worker --outdir results/mi/mouse_palantir_rtk \
-      --chunk $SLURM_ARRAY_TASK_ID --perms 1001
-
-  python mi_pseudotime.py merge --outdir results/mi/mouse_palantir_rtk
+Example:
+  python mi_pseudotime.py prep --h5ad <rooted.h5ad> --pt-key palantir_pt_rtk \\
+      --layer log1p --min-counts 10 --chunks 200 --outdir results/mi/<run>
+  python mi_pseudotime.py worker --outdir results/mi/<run> --chunk $SLURM_ARRAY_TASK_ID
+  python mi_pseudotime.py merge --outdir results/mi/<run>
 """
 from __future__ import annotations
 
@@ -61,17 +36,17 @@ import numpy as np
 import pandas as pd
 
 
-# ----------------------------------------------------------------------------- utils
+# Shared helpers ----
 def empirical_p(obs: float, null: np.ndarray) -> float:
-    """One-sided empirical p: P(null >= observed), with the +1/+1 continuity guard so
-    a gene can never get p=0 (that would break BH). n permutations -> min p = 1/(n+1)."""
+    """One-sided empirical p, P(null >= observed), with +1/+1 continuity so that no
+    gene gets p = 0 (which would break BH). With n permutations, min p = 1/(n+1)."""
     return (float((null >= obs).sum()) + 1.0) / (len(null) + 1.0)
 
 
 def chunk_bounds(n_items: int, n_chunks: int, chunk_id: int) -> tuple[int, int]:
     """Half-open [start, end) for chunk_id, splitting n_items into n_chunks even pieces.
-    Deterministic and identical between prep (which writes n_chunks) and worker (which
-    reads it back from the manifest) — that is the contract the original broke."""
+    prep writes n_chunks to the manifest and worker reads it back, so both sides
+    compute the same bounds."""
     if not 0 <= chunk_id < n_chunks:
         raise ValueError(f"chunk_id {chunk_id} out of range [0, {n_chunks})")
     edges = np.linspace(0, n_items, n_chunks + 1, dtype=int)
@@ -85,7 +60,7 @@ def load_manifest(outdir: pathlib.Path) -> dict:
     return json.loads(mpath.read_text())
 
 
-# ----------------------------------------------------------------------------- prep
+# prep ----
 def cmd_prep(args: argparse.Namespace) -> None:
     import scanpy as sc
 
@@ -95,6 +70,7 @@ def cmd_prep(args: argparse.Namespace) -> None:
     print(f"[prep] reading {args.h5ad}", flush=True)
     adata = sc.read_h5ad(args.h5ad)
 
+    # A NaN pseudotime would silently poison every MI value, so it is an error here.
     if args.pt_key not in adata.obs.columns:
         raise SystemExit(
             f"[prep] pseudotime key {args.pt_key!r} not in obs. "
@@ -106,11 +82,9 @@ def cmd_prep(args: argparse.Namespace) -> None:
             f"[prep] {adata.n_obs - n_finite} cells have non-finite {args.pt_key!r}; "
             f"subset or re-root before MI (a NaN pseudotime silently poisons MI).")
 
-    # detection filter (2026-09-16): keep genes detected (count > 0) in at least
-    # --min-detect-frac of cells, computed on the counts layer -- the posted
-    # methods' "expressed in at least 1% of cells" criterion. Sparse genes have
-    # degenerate KSG nulls (tiny MI passes); this removes them explicitly rather
-    # than letting subsampling attrition do it implicitly. 0 disables (legacy).
+    # Detection filter: keep genes with count > 0 in at least --min-detect-frac of
+    # cells, on the counts layer. This is the methods' "expressed in at least 1% of
+    # cells" criterion.
     if args.min_detect_frac > 0:
         import scipy.sparse as _sp
         C = adata.layers["counts"] if "counts" in adata.layers else adata.X
@@ -120,23 +94,21 @@ def cmd_prep(args: argparse.Namespace) -> None:
               f"{int(keep.sum()):,}/{adata.n_vars:,} genes kept", flush=True)
         adata = adata[:, keep].copy()
 
-    # gene filter on counts, exactly as the original (keeps informative genes only)
     sc.pp.filter_genes(adata, min_counts=args.min_counts)
     print(f"[prep] {adata.n_vars:,} genes remain after min_counts={args.min_counts}", flush=True)
 
+    # Some source objects carry only a 'counts' layer. In that
+    # case log1p(CP10K) is derived here, and the manifest records that it was.
     layer_used = args.layer
     if args.layer not in adata.layers:
         if "counts" in adata.layers:
-            # Rooted objects from the notebook path carry only 'counts'. Rather
-            # than fail, derive the standard log1p(CP10K) here — the derivation
-            # is deterministic and recorded in the manifest as layer_used.
             print(f"[prep] layer {args.layer!r} absent; deriving log1p(CP10K) "
                   f"from 'counts' (recorded in manifest)", flush=True)
             import scipy.sparse as sp
             C = adata.layers["counts"]
             C = C.tocsr().astype(np.float64) if sp.issparse(C) else np.asarray(C, np.float64)
             rs = np.asarray(C.sum(axis=1)).ravel()
-            rs[rs == 0] = 1.0
+            rs[rs == 0] = 1.0  # a cell with zero counts stays all-zero instead of NaN
             C = (sp.diags(1e4 / rs) @ C) if sp.issparse(C) else (C * (1e4 / rs)[:, None])
             X = C.toarray() if sp.issparse(C) else C
             np.log1p(X, out=X)
@@ -150,17 +122,18 @@ def cmd_prep(args: argparse.Namespace) -> None:
         X = X.toarray() if not isinstance(X, np.ndarray) else X
     X = np.ascontiguousarray(X, dtype=np.float32)
 
+    # Write matrices and manifest ----
     np.savez_compressed(out / "expr.npz", X=X)
     np.save(out / "pseudotime.npy", pt)
     np.save(out / "genes.npy", adata.var_names.to_numpy())
 
+    # perms and subsample_cells are recorded as provenance and become the workers'
+    # defaults, so a run's power settings are never left implicit.
     manifest = dict(
         pt_key=args.pt_key, layer=layer_used, min_counts=int(args.min_counts),
         min_detect_frac=float(args.min_detect_frac),
         n_cells=int(adata.n_obs), n_genes=int(adata.n_vars),
         n_chunks=int(args.chunks), seed=int(args.seed), h5ad=str(args.h5ad),
-        # power settings recorded as provenance; workers default to these values
-        # (the 2025-09 era's unrecorded --subsample-cells cost a forensic evening)
         perms=int(args.perms), subsample_cells=int(args.subsample_cells),
     )
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -168,15 +141,16 @@ def cmd_prep(args: argparse.Namespace) -> None:
           f"({adata.n_obs:,} cells x {adata.n_vars:,} genes, {args.chunks} chunks)", flush=True)
 
 
-# ----------------------------------------------------------------------------- worker
+# worker ----
 def cmd_worker(args: argparse.Namespace) -> None:
     from sklearn.feature_selection import mutual_info_regression
 
     out = args.outdir.resolve()
     man = load_manifest(out)
     n_chunks = man["n_chunks"]
-    # power settings: CLI override, else the manifest's recorded values, else
-    # legacy defaults (pre-2026-09-16 manifests lack these keys)
+
+    # Power settings: CLI override, else the manifest, else the defaults that
+    # older manifests (which lack these keys) were run with.
     if args.perms is None:
         args.perms = int(man.get("perms", 1001))
     if args.subsample_cells is None:
@@ -194,33 +168,36 @@ def cmd_worker(args: argparse.Namespace) -> None:
           f"pt_key={man['pt_key']}  perms={args.perms}  "
           f"subsample_cells={args.subsample_cells}", flush=True)
 
-    # one RNG per chunk, seeded off the prep seed so the whole run is reproducible
+    # One RNG per chunk, derived from the prep seed (stride 100_000 leaves room
+    # for the chunk index), so the whole run is reproducible. The estimator's own
+    # seed is the same for observed and null so the two are comparable.
     rng = np.random.default_rng(man["seed"] * 100_000 + args.chunk)
-    # MI's own estimator seed: fixed per worker so observed + null are comparable
     mi_seed = man["seed"]
     n_null = args.perms - 1
     null_cols = [f"mi_null_{i}" for i in range(1, args.perms)]
 
-    # ---- cost control (v2, after the 33k-cell run hit walltime) -------------
-    # (a) SUBSAMPLE cells for the estimator: KSG MI on n cells is O(n log n)
-    #     per call and stabilizes well below 33k cells. One fixed subsample per
-    #     worker (same seed logic) keeps observed and null on identical cells.
+    # Cost control ----
+    # (a) Subsample cells for the estimator: kNN MI on n cells is O(n log n) per
+    #     call and stabilizes well below the full 33k cells. One subsample per
+    #     worker keeps observed and null on identical cells.
     if args.subsample_cells and X.shape[0] > args.subsample_cells:
         sub = np.sort(rng.choice(X.shape[0], size=args.subsample_cells, replace=False))
         X, y = X[sub], y[sub]
         print(f"[worker {args.chunk:03d}] subsampled to {len(sub):,} cells "
               f"for the estimator", flush=True)
-    # (b) SHARED PERMUTATIONS across genes in the chunk: draw the shuffled
-    #     pseudotime vectors ONCE and reuse them for every gene. The per-gene
-    #     empirical p is unchanged in expectation (each gene still sees
-    #     args.perms-1 independent shuffles of y); sharing only introduces
-    #     dependence BETWEEN genes' p-values, which BH tolerates (PRDS).
+
+    # (b) Permutations shared across the chunk's genes: the shuffled pseudotime
+    #     vectors are drawn once and reused for every gene. Each gene's empirical
+    #     p is unchanged in expectation (it still sees perms-1 independent shuffles
+    #     of y); sharing introduces dependence between genes' p-values, and BH is
+    #     applied to them as is.
     Y_null = np.empty((n_null, y.shape[0]), dtype=y.dtype)
     y_shuf = y.copy()
     for p in range(n_null):
         rng.shuffle(y_shuf)
         Y_null[p] = y_shuf
 
+    # MI per gene ----
     records = []
     for i in gidx:
         xi = X[:, [i]]
@@ -245,7 +222,7 @@ def cmd_worker(args: argparse.Namespace) -> None:
     print(f"[worker {args.chunk:03d}] wrote {len(records)} genes -> {dest}", flush=True)
 
 
-# ----------------------------------------------------------------------------- merge
+# merge ----
 def cmd_merge(args: argparse.Namespace) -> None:
     import statsmodels.stats.multitest as smm
 
@@ -255,6 +232,7 @@ def cmd_merge(args: argparse.Namespace) -> None:
     if not files:
         raise SystemExit(f"[merge] no per-chunk CSVs in {out/'results'}")
 
+    # A partial merge is allowed but announced: BH is then computed over fewer genes.
     n_expected = man["n_chunks"]
     if len(files) != n_expected:
         print(f"[merge] WARNING: {len(files)}/{n_expected} chunk files present — "
@@ -272,16 +250,15 @@ def cmd_merge(args: argparse.Namespace) -> None:
     print(f"[merge] wrote {dest}  (n={len(df):,}, {n_sig:,} genes at FDR<{args.fdr})", flush=True)
 
 
-# ----------------------------------------------------------------------------- diff
+# diff ----
 def cmd_diff(args: argparse.Namespace) -> None:
-    """Differential MI between two merged runs (A vs B): same genes, different condition
-    or different pt-key. Reports per shared gene: mi_a, mi_b, delta_mi = mi_a - mi_b, and
-    each run's BH q (q_a, q_b), sorted by |delta_mi|. Ranking + the two q's flag genes
-    whose MI is real in one run and moves between them; it is a descriptive comparison,
-    not a significance test on the delta itself. (A permutation test on delta_mi would
-    need the per-gene null MI distributions — run `worker --keep-null` on both and add a
-    merge that preserves the mi_null_* columns; the current merge drops them, so that
-    path is intentionally not wired here.)"""
+    """Differential MI between two merged runs (A vs B) over their shared genes.
+
+    Writes mi_a, mi_b, delta_mi = mi_a - mi_b and each run's BH q, sorted by
+    |delta_mi|. This is a descriptive comparison, not a test on the delta: a
+    permutation test would need the per-gene null distributions, which merge
+    drops (worker --keep-null writes them, but no merge keeps them).
+    """
     a = pd.read_csv(args.a).set_index("gene")
     b = pd.read_csv(args.b).set_index("gene")
     shared = a.index.intersection(b.index)
@@ -303,9 +280,11 @@ def cmd_diff(args: argparse.Namespace) -> None:
     print("[diff] top |delta MI|:\n" + d.head(10).to_string())
 
 
-# ----------------------------------------------------------------------------- CLI
+# Command line ----
 def build_parser() -> argparse.ArgumentParser:
-    P = argparse.ArgumentParser(description="MI(expression, pseudotime): prep / worker / merge / diff")
+    P = argparse.ArgumentParser(
+        description="MI(expression, pseudotime): prep / worker / merge / diff",
+    )
     sub = P.add_subparsers(dest="mode", required=True)
 
     pp = sub.add_parser("prep", help="write matrices + manifest")

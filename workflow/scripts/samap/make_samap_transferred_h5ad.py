@@ -1,21 +1,17 @@
-#!/usr/bin/env python
-"""make_transferred_h5ad.py — collaborator-ready joint object with transfers.
+"""Build the collaborator-ready joint object with cross-species transfers for one arm.
 
-Loads one arm's samap.pkl and writes <arm>/samap_transferred.h5ad containing:
-  * the stitched joint object (SAM-processed expression in .X, joint UMAP,
-    combined kNN graph, homology graphs in varp)
-  * unified per-cell metadata as plain string obs columns (species, sample,
-    timepoint, cell_type_annotations, cell_subtype_annotations) — pulled from
-    the per-species SAM objects, since the joint copy keeps only
-    categorical-dtype columns
-  * ALL cross-species transferred labels + vote confidences from
-    <arm>/staining/*.csv, as obs columns:
-      transferred_mm_coarse / _confidence   (human cells; NaN on mouse)
-      transferred_mm_fine   / _confidence   (human cells)
-      transferred_hs_coarse / _confidence   (mouse cells)
-  * uns['provenance'] describing exactly what .X is and where raw counts live.
+Reads <arm-dir>/samap.pkl and the staining CSVs under <arm-dir>/staining/ and
+writes <arm-dir>/samap_transferred.h5ad. Called by rule samap_raw_transferred
+(workflow/rules/10b_samap_raw.smk).
 
-Usage: python make_transferred_h5ad.py --arm-dir runs_raw/vanilla_raw
+The output holds the stitched joint object (SAM-processed expression in .X,
+joint UMAP, combined kNN graph, homology graphs in varp), unified per-cell
+metadata as plain string obs columns (species, sample, timepoint,
+cell_type_annotations, cell_subtype_annotations) pulled from the per-species
+SAM objects, every transferred label with its vote confidence as obs columns
+(transferred_mm_coarse and transferred_mm_fine on human cells, NaN on mouse,
+and transferred_hs_coarse on mouse cells), and uns['provenance'] describing
+what .X is and where raw counts live.
 """
 
 from __future__ import annotations
@@ -31,6 +27,9 @@ import pandas as pd
 import anndata._core.file_backing as _fb
 
 
+# Pickles written by an older anndata store the file-manager reference under
+# "_adata"; the installed anndata expects "_adata_ref". Without this shim the
+# samap.pkl cannot be unpickled.
 def _ps(self, state):
     if "_adata_ref" not in state and "_adata" in state:
         state = dict(state)
@@ -46,6 +45,7 @@ def log(m):
 
 
 def load_samap_pkl(path):
+    # load_samap moved between samap releases.
     try:
         from samap import load_samap
     except ImportError:
@@ -65,7 +65,9 @@ def main():
     joint = sm.samap.adata
     log(f"joint object: {joint.shape}")
 
-    # --- unified per-species metadata (plain strings; joint copy is lossy) ---
+    # Unified per-species metadata ----
+    # The joint object keeps only categorical-dtype obs columns, so the per-species
+    # SAM objects are the complete source.
     for col in ("sample", "timepoint", "cell_type_annotations",
                 "cell_subtype_annotations"):
         v = pd.Series(index=joint.obs_names, dtype=object)
@@ -76,7 +78,7 @@ def main():
                 v.loc[common] = so.loc[common, col].astype(str).values
         joint.obs[col] = v.values
 
-    # --- transferred labels + confidences from the staining CSVs -------------
+    # Transferred labels and confidences from the staining CSVs ----
     attached = []
     for stem, col in (("hs_from_mm_coarse", "transferred_mm_coarse"),
                       ("hs_from_mm_fine", "transferred_mm_fine"),
@@ -85,21 +87,24 @@ def main():
         if not f.exists():
             log(f"  (missing {f.name}; skipped)")
             continue
+
         df = pd.read_csv(f).set_index("cell")
         lab = df[col].reindex(joint.obs_names)
         conf = df["confidence"].reindex(joint.obs_names)
         joint.obs[col] = lab.values
         joint.obs[f"{col}_confidence"] = conf.values.astype(float)
+
         n = int(lab.notna().sum())
         attached.append(f"{col} ({n} cells)")
         log(f"  attached {col}: {n} cells, "
             f"median confidence {np.nanmedian(conf.values):.3f}")
 
-    # object-dtype obs columns write poorly with NaN mixtures -> stringify
+    # Object-dtype obs columns mixing strings and NaN do not write to h5ad cleanly.
     for c in joint.obs.columns:
         if joint.obs[c].dtype == object:
             joint.obs[c] = joint.obs[c].astype(str).replace("nan", "NA")
 
+    # Provenance ----
     joint.uns["provenance"] = json.dumps({
         "created": datetime.now().isoformat(),
         "arm": str(arm),
@@ -114,6 +119,7 @@ def main():
         "graphs": "obsp['connectivities'] = stitched joint kNN; varp = homology graphs",
     })
 
+    # Write ----
     out = arm / args.out_name
     log(f"writing {out} ...")
     joint.write_h5ad(out)

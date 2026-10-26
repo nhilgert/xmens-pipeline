@@ -1,23 +1,21 @@
-#!/usr/bin/env python
-"""run_arm.py — one full-object cross-species SAMap fit + evaluation.
+"""One full-object cross-species SAMap fit plus evaluation, for a single arm.
+
+Reads the two all-timepoint SAMap input h5ads (--hs, --mm) and the hsmm/
+homology maps under --maps-dir. Writes samap.pkl, meta.json, eval.json,
+mapping_{celltype,subtype,timepoint}.csv and figures/umap_*.png under
+--out-dir. Called by rule samap_raw_fit (workflow/rules/10b_samap_raw.smk).
 
 Arms (--arm):
   vanilla : stock SAMap, no within-species correction (the baseline)
-  harmony : stock SAMap's built-in hook — sam.run(batch_key='sample') runs
-            harmonypy on the weighted PCA inside every SAM iteration
-            (requires harmonypy==0.0.10; the >=2.0 API breaks the stock hook)
-  scvi    : slot 1 — the per-species manifold (kNN graph + gene weights) is
-            rebuilt from a precomputed scVI latent found in obsm
-            (samap_scvi.use_embedding_manifold; SAMap itself is stock)
+  harmony : stock SAMap's built-in hook, sam.run(batch_key='sample'), which
+            runs harmonypy on the weighted PCA inside every SAM iteration
+            (requires harmonypy==0.0.10 because the >=2.0 API breaks the hook)
+  scvi    : slot 1, where the per-species manifold is rebuilt after SAM.run
+            from a precomputed scVI latent found in obsm
+            (samap_scvi.use_embedding_manifold, with SAMap itself stock)
 
-All arms share identical inputs (CP10K fib/dec objects from prep_full_input.py)
-and identical SAMAP settings, so differences are attributable to the
-within-species manifold alone.
-
-Outputs under --out-dir:
-  samap.pkl, meta.json, eval.json,
-  mapping_celltype.csv, mapping_subtype.csv, mapping_timepoint.csv,
-  figures/umap_{species,timepoint,sample,celltype}.png
+All arms share identical inputs (from prep_samap_full_input.py) and identical
+SAMAP settings, so differences are attributable to the within-species manifold.
 """
 
 from __future__ import annotations
@@ -33,12 +31,14 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-# SAMAP defaults (samap/core/mapping.py + _constants.py, sc-samap 3.0.1)
+# SAMAP defaults (samap/core/mapping.py and _constants.py, sc-samap 3.0.1), spelled
+# out so a change in a future release cannot silently alter the fit.
 PRE = dict(sum_norm="cell_median", norm="log", thresh_low=0.0, thresh_high=0.96,
            min_expression=1)
 RUN = dict(preprocessing="StandardScaler", npcs=100, weight_PCs=False, k=20,
            n_genes=3000, weight_mode="rms", verbose=False)
 
+# obsm keys tried in order when --latent-key AUTO; the fib/dec-specific latents first.
 LATENT_PRIORITY = [
     "X_scvi_fibdec", "X_scVI_fibdec", "X_scvi_fib_dec", "X_scVI_fib_dec",
     "X_scvi", "X_scVI", "X_scanvi", "X_scANVI", "X_latent", "latent",
@@ -54,9 +54,12 @@ def pick_latent_key(obsm_keys: list[str], requested: str) -> str:
         if requested not in obsm_keys:
             raise SystemExit(f"--latent-key {requested!r} not in obsm: {obsm_keys}")
         return requested
+
     for k in LATENT_PRIORITY:
         if k in obsm_keys:
             return k
+
+    # Fall back to a name match only when it is unambiguous.
     rx = re.compile(r"scvi|scanvi|latent", re.IGNORECASE)
     hits = [k for k in obsm_keys if rx.search(k) and "umap" not in k.lower()]
     if len(hits) == 1:
@@ -71,13 +74,16 @@ def describe_input_scale(sam) -> str:
     """Report what SAM actually loaded, for the record in the job log.
 
     SAM.load_data prefers .raw.X when .raw exists, so this inspects the matrix
-    SAM will actually preprocess — not what we think we wrote.
+    SAM will preprocess rather than the one the prep script intended to write.
     """
     X = sam.adata.X
     X = X.tocsr() if sp.issparse(X) else sp.csr_matrix(X)
     head = X[: min(2000, X.shape[0])]
     head = head.toarray()
     rs = np.asarray(X.sum(1)).ravel()
+
+    # Raw counts are integer-valued with variable library sizes; CP10K rows all sum
+    # to the same value, so their CV is numerically zero.
     integer = bool(np.allclose(head, np.round(head)))
     cv = float(rs.std() / max(rs.mean(), 1e-12))
     kind = ("RAW COUNTS" if integer and cv > 0.05 else
@@ -90,12 +96,14 @@ def describe_input_scale(sam) -> str:
 
 def build_sam(path: str, arm: str, batch_key: str, latent_key: str,
               min_expression: float = 1):
+    """Load one species, preprocess, and run SAM with the arm's manifold choice."""
     from samap.sam import SAM
 
     sam = SAM()
     sam.load_data(path)
     log(f"  loaded {path}: {sam.adata.shape}")
     log(describe_input_scale(sam))
+
     pre = dict(PRE, min_expression=min_expression)
     log(f"  preprocess_data({pre})")
     sam.preprocess_data(**pre)
@@ -108,6 +116,7 @@ def build_sam(path: str, arm: str, batch_key: str, latent_key: str,
     sam.run(**run_kw)
     log(f"  SAM.run done in {(time.time() - t0) / 60:.1f} min")
 
+    # The scvi arm replaces the manifold after SAM.run (samap_scvi.use_embedding_manifold).
     used_key = None
     if arm == "scvi":
         from samap_scvi import use_embedding_manifold
@@ -115,31 +124,32 @@ def build_sam(path: str, arm: str, batch_key: str, latent_key: str,
         keys = list(sam.adata.obsm.keys())
         used_key = pick_latent_key(keys, latent_key)
         Z = np.asarray(sam.adata.obsm[used_key])
-        if Z.ndim != 2 or not (2 <= Z.shape[1] <= 256):
+        if Z.ndim != 2 or not (2 <= Z.shape[1] <= 256):  # a UMAP or a matrix is not a latent
             raise SystemExit(f"obsm[{used_key!r}] has shape {Z.shape}; not a latent")
         log(f"  slot 1: rebuilding manifold from obsm[{used_key!r}] {Z.shape}")
         use_embedding_manifold(sam, Z, key_added="X_slot1", k=RUN["k"])
     return sam, used_key
 
 
-# ---------------------------------------------------------------------------- #
-# Evaluation on the stitched object                                            #
-# ---------------------------------------------------------------------------- #
+# Evaluation on the stitched object ----
 
 
 def sample_mixing(nnm: sp.spmatrix, samples: np.ndarray) -> dict:
-    """Observed vs expected fraction of neighbor weight in a DIFFERENT sample."""
+    """Observed vs expected fraction of neighbor weight in a different sample."""
     nnm = nnm.tocsr()
     n = nnm.shape[0]
     cats, codes = np.unique(samples, return_inverse=True)
     onehot = sp.csr_matrix(
         (np.ones(n), (np.arange(n), codes)), shape=(n, cats.size)
     )
+
     per_batch = nnm @ onehot  # (n x n_batches) weight to each sample
     total = np.asarray(per_batch.sum(1)).ravel()
     own = np.asarray(per_batch[np.arange(n), codes]).ravel()
     ok = total > 0
     obs_frac = ((total - own) / np.maximum(total, 1e-12))[ok]
+
+    # Expected under random mixing: the share of all cells not in the cell's own sample.
     counts = np.bincount(codes, minlength=cats.size).astype(float)
     exp_frac = (1.0 - counts[codes] / n)[ok]
     return {
@@ -156,6 +166,7 @@ def knn_label_agreement(nnm: sp.spmatrix, labels: np.ndarray) -> float:
     n = nnm.shape[0]
     cats, codes = np.unique(labels, return_inverse=True)
     onehot = sp.csr_matrix((np.ones(n), (np.arange(n), codes)), shape=(n, cats.size))
+
     per = nnm @ onehot
     total = np.asarray(per.sum(1)).ravel()
     own = np.asarray(per[np.arange(n), codes]).ravel()
@@ -164,6 +175,7 @@ def knn_label_agreement(nnm: sp.spmatrix, labels: np.ndarray) -> float:
 
 
 def evaluate(sm, out: Path) -> dict:
+    """Alignment, within-species mixing/purity, mapping tables and UMAPs for one arm."""
     import scanpy as sc
     from samap.analysis import get_mapping_scores
     from samap.core.mapping import _avg_as
@@ -175,13 +187,13 @@ def evaluate(sm, out: Path) -> dict:
 
     res: dict = {"n_cells_joint": int(ad_j.n_obs)}
 
-    # cross-species alignment
+    # Cross-species alignment: SAMap's species-by-species alignment score, off-diagonal mean.
     A = _avg_as(sm.samap)
     res["alignment"] = {r: {c: float(A.loc[r, c]) for c in A.columns} for r in A.index}
     off = A.values[~np.eye(A.shape[0], dtype=bool)]
     res["mean_alignment"] = float(off.mean())
 
-    # joint leiden once (symmetrized graph), reused for per-species ARI/NMI
+    # Joint leiden once on the symmetrized graph, reused for per-species ARI/NMI.
     t0 = time.time()
     sym = ((nnm + nnm.T) * 0.5).tocsr()
     sc.tl.leiden(ad_j, adjacency=sym, key_added="joint_leiden", resolution=1.0,
@@ -189,6 +201,7 @@ def evaluate(sm, out: Path) -> dict:
     log(f"  joint leiden: {ad_j.obs['joint_leiden'].nunique()} clusters "
         f"({time.time() - t0:.0f}s)")
 
+    # Within-species metrics on each species' block of the joint graph.
     for sid in np.unique(species):
         mask = species == sid
         sub = nnm[mask][:, mask]
@@ -210,6 +223,8 @@ def evaluate(sm, out: Path) -> dict:
                 normalized_mutual_info_score(samples, leiden)
             ),
         }
+
+        # Subtype metrics only mean something when the species has more than one subtype.
         if len(set(subtype)) > 1:
             d["knn_subtype_agreement"] = knn_label_agreement(sub, subtype)
             d["leiden_vs_subtype_ARI"] = float(adjusted_rand_score(subtype, leiden))
@@ -218,7 +233,8 @@ def evaluate(sm, out: Path) -> dict:
             )
         res[f"within_{sid}"] = d
 
-    # mapping tables
+    # Mapping tables ----
+    # Human has no fine subtypes, so the subtype table pairs human coarse with mouse fine.
     for tag, keys in [
         ("celltype", {"hs": "cell_type_annotations", "mm": "cell_type_annotations"}),
         ("subtype", {"hs": "cell_type_annotations", "mm": "cell_subtype_annotations"}),
@@ -233,10 +249,11 @@ def evaluate(sm, out: Path) -> dict:
                 res["celltype_mapping"] = {
                     r: {c: float(M.loc[r, c]) for c in mm_cols} for r in hs_rows
                 }
-        except Exception as e:  # non-fatal
+        except Exception as e:  # the tables are diagnostics, and eval.json must still be written
             log(f"  mapping table {tag} failed: {e}")
 
-    # figures
+    # Figures ----
+    # Diagnostic UMAPs, not rule outputs, so a render failure must not fail the arm.
     try:
         import matplotlib
 
@@ -245,7 +262,9 @@ def evaluate(sm, out: Path) -> dict:
 
         figdir = out / "figures"
         figdir.mkdir(exist_ok=True)
-        # carry per-species obs onto the joint object for coloring
+
+        # Per-species obs columns live on the SAM objects, not the joint object, so
+        # they are copied over with a species prefix for coloring.
         for col in ("timepoint", "sample", "cell_type_annotations"):
             v = pd.Series(index=ad_j.obs_names, dtype=object)
             for sid in sm.sams:
@@ -253,6 +272,7 @@ def evaluate(sm, out: Path) -> dict:
                 common = so.index.intersection(ad_j.obs_names)
                 v.loc[common] = sid + ":" + so.loc[common, col].astype(str)
             ad_j.obs[f"joint_{col}"] = pd.Categorical(v.values)
+
         for col, fname in [
             ("species", "umap_species.png"),
             ("joint_timepoint", "umap_timepoint.png"),
@@ -290,6 +310,7 @@ def main() -> None:
 
     from samap import SAMAP, save_samap
 
+    # Provenance is written before the fit so a crashed run still leaves a trail.
     meta = {
         "arm": args.arm,
         "started_at": datetime.now().isoformat(),
@@ -302,6 +323,7 @@ def main() -> None:
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
 
+    # Per-species SAM ----
     log(f"=== arm: {args.arm} ===")
     sams = {}
     latent_keys = {}
@@ -313,6 +335,7 @@ def main() -> None:
         )
     meta["latent_keys"] = latent_keys
 
+    # Cross-species SAMAP ----
     log("SAMAP init ...")
     t0 = time.time()
     sm = SAMAP(sams, f_maps=args.maps_dir.rstrip("/") + "/", save_processed=False)
@@ -327,6 +350,7 @@ def main() -> None:
     save_samap(sm, str(out / "samap.pkl"))
     log(f"wrote {out / 'samap.pkl'}")
 
+    # Evaluate and record ----
     log("evaluating ...")
     res = evaluate(sm, out)
     res["arm"] = args.arm

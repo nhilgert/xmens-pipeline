@@ -1,9 +1,9 @@
-"""STUB — intentionally disabled (2026-09-01 cleanup).
+"""Stub for rule invitro in workflow/rules/23_invitro.smk.
 
-This scaffold stage was never implemented; the real analyses live in the
-numbered arms (10_samap ... 15_pt_per_timepoint). This stub previously
-`touch`ed its declared outputs, which could fabricate empty result files
-(e.g. results/tables/mi_*.csv). It now fails loudly instead.
+Reads nothing and writes nothing: it exits with an error. This scaffold stage
+was never implemented, and no in-vitro comparison exists elsewhere in this
+workflow. Touching the declared outputs would
+fabricate empty result files, so the rule fails loudly instead.
 """
 import sys
 

@@ -1,39 +1,27 @@
-#!/usr/bin/env python
-"""
-spatial_pt_gp.py — spatial Gaussian-process fit of pseudotime, single species.
+"""Gaussian-process fit of pseudotime over tissue coordinates, one species.
 
-Standalone module distilled from revisions/gaston/cross_species_radial_gp.py.
-The cross-species part (SAMap load, barcode alignment, Nadaraya-Watson mm->hs
-transfer) is REMOVED — this fits the GP natively: pseudotime and spatial coords
-live on the same cells, read from one h5ad. The transfer + cross-species gradient
-comparison is deferred to a later module.
+Called by rule `spatial_gp` (12_spatial_gp.smk). Reads an h5ad whose obs carries a
+pseudotime column (--pt-key) and spatial coordinates in microns (--x-key, --y-key),
+subsets to one timepoint, sketches to --sketch-n cells, drops upper-tail pseudotime
+outliers, fits an exact GP (Matern 5/2, ARD over x and y) across a lengthscale sweep
+chosen by log marginal likelihood, and compares the chosen fit with a permutation null.
+Writes under --outdir: gp_fit_summary.json, gp_field.npz (grid, posterior mean and
+gradient field, fitted cells) and four diagnostic figures under figures/.
 
-What it does, per (h5ad, pt-key, timepoint):
-  1. subset to the timepoint, keep cells with finite pseudotime + spatial coords
-  2. optional geosketch to --sketch-n cells (default 5000; exact GP is O(n^3))
-  3. one-sided MAD outlier filter on pseudotime (drops upper-tail scatter)
-  4. fit ExactGP: ScaleKernel(Matern nu=2.5, ard_num_dims=2) over (x, y) microns,
-     GaussianLikelihood, Adam, --train-iters steps
-  5. lengthscale sweep (fixed values + learned), chosen by log marginal likelihood
-  6. gradient of the GP posterior mean via autograd -> grad field on a grid
-     (kept from the original: it is one function and the quiver/streamline figures
-      are the readout — the DEFERRED part is the cross-species transfer, not this)
-  7. permutation null (shuffled pt, same GP) -> MLL gap as the signal check
-  8. outputs under --outdir:
-       gp_fit_summary.json     chosen lengthscale, MLL per candidate, null MLL, n cells
-       gp_field.npz            grid xy, posterior mean, gradient field, cell xy + pt
-       figures/{01_pt_spatial, 02_lengthscale_sweep, 03_streamlines, 04_null}.png
+Single species only: the cross-species transfer arm is not part of this script
+(12_spatial_gp.smk defers it).
+Pseudotime and coordinates must live on the same cells in one object.
 
 Usage:
-    python spatial_pt_gp.py \
-        --h5ad   pseudotime_mouse_v2_induced_no_apop/2026_08_28_mouse_fibdec_pseudotime_rooted.h5ad \
-        --pt-key palantir_pt_rtk \
-        --timepoint 1_dpi_late \
-        --x-key x_um_dbscan --y-key y_um_dbscan \
+    python spatial_pt_gp.py \\
+        --h5ad results/.../mouse_fibdec_pseudotime_rooted.h5ad \\
+        --pt-key palantir_pt_rtk \\
+        --timepoint 1_dpi_late \\
+        --x-key x_um_dbscan --y-key y_um_dbscan \\
         --outdir results/spatial_gp/mouse_palantir_rtk_1_dpi_late
 
-Env: needs torch + gpytorch (+ geosketch if --sketch-n). CPU is fine at 5k cells;
-CUDA is used automatically when available.
+Needs torch and gpytorch, plus geosketch when --sketch-n is set. CPU is adequate at
+5k cells (exact GP is O(n^3)). CUDA is used when available.
 """
 from __future__ import annotations
 
@@ -50,9 +38,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-# ------------------------------------------------------------------ CLI
+# Command line ----
 def parse_args():
-    p = argparse.ArgumentParser(description="Spatial GP fit of pseudotime (single species, no transfer)")
+    p = argparse.ArgumentParser(
+        description="Spatial GP fit of pseudotime (single species, no transfer)",
+    )
     p.add_argument("--h5ad", required=True, help="object carrying pseudotime AND spatial coords")
     p.add_argument("--pt-key", default="dpt_pseudotime",
                    help="obs column: dpt_pseudotime, palantir_pt_rtk, palantir_pt_std, ...")
@@ -77,8 +67,9 @@ def parse_args():
     return p.parse_args()
 
 
-# ------------------------------------------------------------------ GP pieces
-# (verbatim structure from cross_species_radial_gp.py, minus the transfer)
+# GP model and helpers ----
+# torch and gpytorch are imported inside the functions; nothing at module level
+# needs them.
 def make_gp_classes():
     import torch
     import gpytorch
@@ -96,14 +87,19 @@ def make_gp_classes():
 
 
 def fit_gp(torch, gpytorch, ExactGP, device, X, y, lengthscale=None, train_iters=150):
+    """Fit an exact GP with a Matern 5/2 kernel; a given lengthscale is held, None is learned."""
     likelihood = gpytorch.likelihoods.GaussianLikelihood().to(device)
     kernel = gpytorch.kernels.ScaleKernel(
         gpytorch.kernels.MaternKernel(nu=2.5, ard_num_dims=2)).to(device)
+
+    # A candidate lengthscale is frozen so that only the outputscale and noise train.
     if lengthscale is not None:
         kernel.base_kernel.lengthscale = torch.tensor([[lengthscale, lengthscale]], device=device)
         kernel.base_kernel.raw_lengthscale.requires_grad_(False)
+
     model = ExactGP(X, y, likelihood, kernel).to(device)
-    model.train(); likelihood.train()
+    model.train()
+    likelihood.train()
     opt = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr=0.05)
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
     for _ in range(train_iters):
@@ -111,18 +107,23 @@ def fit_gp(torch, gpytorch, ExactGP, device, X, y, lengthscale=None, train_iters
         loss = -mll(model(X), y)
         loss.backward()
         opt.step()
-    model.eval(); likelihood.eval()
+
+    model.eval()
+    likelihood.eval()
     return model, likelihood
 
 
 def log_marginal_likelihood(torch, gpytorch, model, likelihood, X, y):
-    model.train(); likelihood.train()
+    """Total (not per-point) log marginal likelihood; gpytorch's MLL is divided by n."""
+    model.train()
+    likelihood.train()
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
     with torch.no_grad():
         return mll(model(X), y).item() * len(y)
 
 
 def gp_gradient(torch, gpytorch, model, lik, X_query):
+    """Gradient of the posterior mean with respect to (x, y) at X_query, via autograd."""
     X_query = X_query.clone().detach().requires_grad_(True)
     with gpytorch.settings.fast_pred_var():
         mean = lik(model(X_query)).mean
@@ -135,7 +136,6 @@ def gp_mean(torch, gpytorch, model, lik, X_query):
         return lik(model(X_query)).mean.cpu().numpy()
 
 
-# ------------------------------------------------------------------ main
 def main():
     args = parse_args()
     import scanpy as sc
@@ -147,7 +147,7 @@ def main():
     summary = {"h5ad": str(args.h5ad), "pt_key": args.pt_key, "timepoint": args.timepoint,
                "seed": args.seed}
 
-    # ---- 1. load + subset ---------------------------------------------------
+    # Load and subset ----
     a = sc.read_h5ad(args.h5ad)
     if args.pt_key not in a.obs.columns:
         raise SystemExit(f"pt key {args.pt_key!r} not in obs. Have: {sorted(a.obs.columns)}")
@@ -165,7 +165,7 @@ def main():
     summary["n_cells_subset"] = int(a.n_obs)
     summary["n_cells_with_pt_and_coords"] = int(ok.sum())
     print(f"cells: {a.n_obs:,} in subset; {ok.sum():,} with finite pt + coords", flush=True)
-    if ok.sum() < 200:
+    if ok.sum() < 200:  # minimum cells for the GP to say anything about the field
         raise SystemExit("fewer than 200 usable cells — refusing a meaningless GP fit")
 
     X_all = np.stack([x[ok], y[ok]], axis=1)
@@ -173,7 +173,9 @@ def main():
     samples = a.obs[args.sample_key].astype(str).to_numpy()[ok] \
         if args.sample_key in a.obs.columns else np.repeat("all", ok.sum())
 
-    # ---- 2. sketch ----------------------------------------------------------
+    # Sketch ----
+    # Geometric sketching keeps spatial coverage even; a uniform draw is the
+    # fallback when geosketch is not installed.
     if args.sketch_n and len(y_all) > args.sketch_n:
         try:
             from geosketch import gs
@@ -186,11 +188,13 @@ def main():
         X_fit, y_fit = X_all, y_all
     summary["n_cells_fit_pre_outlier"] = int(len(y_fit))
 
-    # ---- 3. one-sided MAD outlier filter ------------------------------------
+    # Upper-tail outlier filter ----
+    # One-sided: only upper-tail pseudotime values are dropped; the threshold is
+    # in units of the median absolute deviation.
     if args.outlier_mad > 0:
         med = np.median(y_fit)
-        mad = np.median(np.abs(y_fit - med)) or 1e-12
-        keep = (y_fit - med) / mad <= args.outlier_mad     # upper tail only
+        mad = np.median(np.abs(y_fit - med)) or 1e-12  # guard against MAD = 0
+        keep = (y_fit - med) / mad <= args.outlier_mad
         n_drop = int((~keep).sum())
         X_fit, y_fit = X_fit[keep], y_fit[keep]
         summary["n_outliers_dropped"] = n_drop
@@ -198,14 +202,16 @@ def main():
 
     summary["n_cells_fit"] = int(len(y_fit))
 
-    # ---- 4-5. fit + lengthscale sweep ---------------------------------------
+    # Lengthscale sweep ----
+    # Each candidate lengthscale is fitted and the one with the highest log
+    # marginal likelihood is kept; None means the lengthscale is learned too.
     torch, gpytorch, ExactGP = make_gp_classes()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     summary["device"] = device
     tX = torch.tensor(X_fit, dtype=torch.float32, device=device)
     ty = torch.tensor(y_fit, dtype=torch.float32, device=device)
 
-    candidates = list(args.lengthscales) + [None]     # None = learned
+    candidates = list(args.lengthscales) + [None]
     fits, mlls = {}, {}
     for ls in candidates:
         tag = f"{ls:g}um" if ls is not None else "learned"
@@ -215,6 +221,7 @@ def main():
         fits[tag] = (model, lik)
         mlls[tag] = mll
         print(f"  lengthscale {tag:>9s}: MLL = {mll:.1f}", flush=True)
+
     best = max(mlls, key=mlls.get)
     model, lik = fits[best]
     learned_ls = model.cov.base_kernel.lengthscale.detach().cpu().numpy().ravel().tolist()
@@ -223,8 +230,8 @@ def main():
     summary["chosen_lengthscale_values_um"] = [round(v, 1) for v in learned_ls]
     print(f"chosen: {best} (ls = {learned_ls})", flush=True)
 
-    # ---- 6. posterior mean + gradient on a grid ------------------------------
-    pad = 0.03 * max(X_fit[:, 0].ptp(), X_fit[:, 1].ptp())
+    # Posterior mean and gradient on a grid ----
+    pad = 0.03 * max(X_fit[:, 0].ptp(), X_fit[:, 1].ptp())  # 3 % margin around the cells
     gx = np.linspace(X_fit[:, 0].min() - pad, X_fit[:, 0].max() + pad, args.grid_res)
     gy = np.linspace(X_fit[:, 1].min() - pad, X_fit[:, 1].max() + pad, args.grid_res)
     GX, GY = np.meshgrid(gx, gy)
@@ -238,7 +245,9 @@ def main():
                         grad_x=grad_grid[..., 0], grad_y=grad_grid[..., 1],
                         cell_xy=X_fit, cell_pt=y_fit)
 
-    # ---- 7. permutation null --------------------------------------------------
+    # Permutation null ----
+    # Same cells and same (chosen) lengthscale with pseudotime shuffled across
+    # cells; the MLL gap is the evidence that pseudotime is spatially structured.
     if args.run_null:
         y_null = y_fit.copy()
         rng.shuffle(y_null)
@@ -251,43 +260,67 @@ def main():
         summary["mll_gap_over_null"] = round(mlls[best] - null_mll, 2)
         print(f"null MLL = {null_mll:.1f}  (gap = {mlls[best] - null_mll:.1f})", flush=True)
 
-    # ---- 8. figures -----------------------------------------------------------
+    # Figures ----
+    # 01: the fitted cells in tissue space, colored by pseudotime (viridis is
+    # perceptually uniform and the usual choice for an ordered quantity).
     f1, ax = plt.subplots(figsize=(7, 6))
     s = ax.scatter(X_fit[:, 0], X_fit[:, 1], c=y_fit, s=4, cmap="viridis")
     plt.colorbar(s, ax=ax, label=args.pt_key)
-    ax.set_xlabel("x (um)"); ax.set_ylabel("y (um)")
+    ax.set_xlabel("x (um)")
+    ax.set_ylabel("y (um)")
     ax.set_title(f"{args.pt_key} in space  ({args.timepoint or 'all'}; n={len(y_fit):,})")
-    ax.set_aspect("equal")
-    f1.tight_layout(); f1.savefig(fig / "01_pt_spatial.png", dpi=150); plt.close(f1)
+    ax.set_aspect("equal")  # coordinates are microns on both axes
+    f1.tight_layout()
+    f1.savefig(fig / "01_pt_spatial.png", dpi=150)
+    plt.close(f1)
 
+    # 02: MLL per lengthscale candidate; the chosen bar is red, the rest blue.
     f2, ax = plt.subplots(figsize=(6, 4))
-    tags = list(mlls); vals = [mlls[t] for t in tags]
+    tags = list(mlls)
+    vals = [mlls[t] for t in tags]
     ax.bar(range(len(tags)), vals, color=["#C44E52" if t == best else "#4C72B0" for t in tags])
-    ax.set_xticks(range(len(tags))); ax.set_xticklabels(tags, rotation=30, ha="right")
-    ax.set_ylabel("log marginal likelihood"); ax.set_title("lengthscale sweep (red = chosen)")
-    f2.tight_layout(); f2.savefig(fig / "02_lengthscale_sweep.png", dpi=150); plt.close(f2)
+    ax.set_xticks(range(len(tags)))
+    ax.set_xticklabels(tags, rotation=30, ha="right")
+    ax.set_ylabel("log marginal likelihood")
+    ax.set_title("lengthscale sweep (red = chosen)")
+    f2.tight_layout()
+    f2.savefig(fig / "02_lengthscale_sweep.png", dpi=150)
+    plt.close(f2)
 
+    # 03: posterior mean as a heatmap with white streamlines of its gradient,
+    # which point in the direction of increasing pseudotime.
     f3, ax = plt.subplots(figsize=(7, 6))
     im = ax.pcolormesh(GX, GY, mean_grid, cmap="viridis", shading="auto")
     plt.colorbar(im, ax=ax, label=f"GP mean {args.pt_key}")
     step = max(1, args.grid_res // 30)
     ax.streamplot(gx, gy, grad_grid[..., 0], grad_grid[..., 1],
                   color="white", density=1.2, linewidth=0.7, arrowsize=0.8)
-    ax.set_xlabel("x (um)"); ax.set_ylabel("y (um)")
+    ax.set_xlabel("x (um)")
+    ax.set_ylabel("y (um)")
     ax.set_title(f"GP posterior mean + gradient streamlines ({best})")
     ax.set_aspect("equal")
-    f3.tight_layout(); f3.savefig(fig / "03_streamlines.png", dpi=150); plt.close(f3)
+    f3.tight_layout()
+    f3.savefig(fig / "03_streamlines.png", dpi=150)
+    plt.close(f3)
 
+    # 04: observed MLL against the shuffled-pseudotime MLL.
     if args.run_null:
         f4, ax = plt.subplots(figsize=(5, 4))
         ax.bar([0, 1], [mlls[best], summary["null_mll"]], color=["#4C72B0", "#999999"])
-        ax.set_xticks([0, 1]); ax.set_xticklabels(["observed", "shuffled pt"])
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(["observed", "shuffled pt"])
         ax.set_ylabel("log marginal likelihood")
         ax.set_title(f"signal vs permutation null (gap {summary['mll_gap_over_null']:.0f})")
-        f4.tight_layout(); f4.savefig(fig / "04_null.png", dpi=150); plt.close(f4)
+        f4.tight_layout()
+        f4.savefig(fig / "04_null.png", dpi=150)
+        plt.close(f4)
 
+    # Save ----
     (out / "gp_fit_summary.json").write_text(json.dumps(summary, indent=2, default=str))
-    print(f"\nwrote {out/'gp_fit_summary.json'}\n      {out/'gp_field.npz'}\n      figures/ (4)", flush=True)
+    print(
+        f"\nwrote {out/'gp_fit_summary.json'}\n      {out/'gp_field.npz'}\n      figures/ (4)",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

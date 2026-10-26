@@ -1,22 +1,21 @@
-#!/usr/bin/env python
-"""transfer_pt_0902.py — mouse -> human pseudotime transfer through the raw
-vanilla SAMap graph.
+"""Mouse -> human pseudotime transfer through the stitched SAMap graph.
 
-Operator: Nadaraya-Watson over the stitched joint graph's cross-species block,
+Reads the joint samap_transferred.h5ad (--joint-h5ad, for obsp connectivities)
+and a mouse object carrying pseudotime (--pt-h5ad). Writes
+<out-dir>/pt_transferred_hs.csv (per human cell: every variant plus the total
+cross-species vote weight), summary.json and pt_hist.png. Called by rule
+samap_raw_pt_transfer (workflow/rules/10b_samap_raw.smk).
+
+Operator: Nadaraya-Watson over the joint graph's cross-species block,
   pt_hs = (C_hs,mm @ pt_mm) / (C_hs,mm @ 1),
-with pt_mm joined from an external mouse object by barcode (exact ->
-canonical-16-mer fallback).
+with pt_mm joined from the mouse object by barcode (exact, then a canonical
+14-20 bp core fallback).
 
 Three source variants are transferred side by side:
   pt_raw               : obs[pt_col] as-is
-  pt_ranknorm          : global rank / N over finite source values (Nick's
-                         "quantile-normalized ... rank divided by N")
+  pt_ranknorm          : global rank / N over finite source values
   pt_ranknorm_insample : rank / N within each source sample (the isodepth
-                         session's within-sample convention), when a sample
-                         column exists
-
-Outputs: <out>/pt_transferred_hs.csv (per human cell: all variants + total
-cross-species vote weight), <out>/summary.json, <out>/pt_hist.png.
+                         within-sample convention), when a sample column exists
 """
 
 from __future__ import annotations
@@ -36,21 +35,26 @@ def log(m):
 
 
 def canon(bc: str) -> str:
+    """The bare 14-20 bp barcode core, so prefixes and suffixes added by different tools match."""
     m = re.search(r"[ACGTN]{14,20}", str(bc).upper())
     return m.group(0) if m else str(bc)
 
 
 def barcode_join(barcodes, names, values):
-    """Exact barcode match first. The canonical (bare 14-20 bp core) fallback is used ONLY when a
-    barcode is ABSENT from the source - never when it is present with a NaN value (cells excluded
-    from a pseudotime variant by design) - and never through a core shared by more than one source
-    cell (cores collide across samples). Fixed 2026-09-25: the previous version fell back whenever
-    the exact value was NaN, so 9 apoptotic cells borrowed another sample's pseudotime."""
+    """Look up `values` (indexed by `names`) for each barcode, exact match first.
+
+    The canonical-core fallback is used only when a barcode is absent from the
+    source, never when it is present with a NaN value (cells excluded from a
+    pseudotime variant by design), and never through a core shared by more
+    than one source cell (cores collide across samples). Returns the values and
+    a count per match tier.
+    """
     vals = pd.to_numeric(pd.Series(values), errors="coerce").values
     lut = dict(zip(names, vals))
     cores = pd.Series([canon(k) for k in names])
     amb = set(cores[cores.duplicated(keep=False)])
     lut_c = {k: v for k, v in zip(cores, vals) if k not in amb}
+
     out = np.full(len(barcodes), np.nan)
     tiers = {"exact": 0, "exact_nan": 0, "canon": 0, "canon_ambiguous": 0, "none": 0}
     for i, bc in enumerate(barcodes):
@@ -62,6 +66,7 @@ def barcode_join(barcodes, names, values):
             else:
                 tiers["exact_nan"] += 1
             continue
+
         k = canon(bc)
         if k in amb:
             tiers["canon_ambiguous"] += 1
@@ -76,6 +81,7 @@ def barcode_join(barcodes, names, values):
 
 
 def ranknorm(v):
+    """Average rank / N over the finite values, NaN elsewhere."""
     out = np.full_like(v, np.nan, dtype=float)
     ok = np.isfinite(v)
     r = pd.Series(v[ok]).rank(method="average").values
@@ -97,6 +103,8 @@ def main():
 
     import anndata as ad
 
+    # Load inputs ----
+    # Backed mode: only obs and obsp are needed, not the expression matrix.
     log(f"loading joint {args.joint_h5ad} (backed) ...")
     joint = ad.read_h5ad(args.joint_h5ad, backed="r")
     conn = joint.obsp["connectivities"].tocsr()
@@ -113,6 +121,7 @@ def main():
     log(f"source: {src.n_obs} cells, finite pt: {int(np.isfinite(pt0).sum())}, "
         f"range [{np.nanmin(pt0):.3f}, {np.nanmax(pt0):.3f}]")
 
+    # Source variants ----
     variants = {"pt_raw": pt0, "pt_ranknorm": ranknorm(pt0)}
     if args.sample_col in src.obs.columns:
         ws = np.full(len(pt0), np.nan)
@@ -123,6 +132,7 @@ def main():
         variants["pt_ranknorm_insample"] = ws
         log(f"within-sample variant over {len(np.unique(samples))} samples")
 
+    # Transfer each variant over the human x mouse block ----
     mm_bcs = joint.obs_names[mm_m].astype(str).values
     C = conn[hs_m][:, mm_m].tocsr()
     res = pd.DataFrame(index=joint.obs_names[hs_m])
@@ -131,6 +141,8 @@ def main():
 
     for vname, vals in variants.items():
         pt_mm, tiers = barcode_join(mm_bcs, names, vals)
+
+        # Mouse cells without a pseudotime drop out of both numerator and denominator.
         valid = np.isfinite(pt_mm)
         pt_fill = np.where(valid, pt_mm, 0.0)
         num = np.asarray(C @ pt_fill).ravel()
@@ -139,8 +151,12 @@ def main():
         ok = den > 1e-10
         tr[ok] = num[ok] / den[ok]
         res[vname] = tr
+
+        # The weight depends only on the graph and the valid mask, so it is the same
+        # for every variant when all source cells carry every variant.
         if "weight" not in res.columns:
             res["weight"] = den
+
         summary[vname] = {
             "source_join": tiers,
             "source_cells_with_pt_on_graph": int(valid.sum()),
@@ -151,10 +167,10 @@ def main():
         log(f"{vname}: join={tiers}, mm-on-graph={int(valid.sum())}, "
             f"hs covered={ok.mean():.3f}")
 
-    # cross-variant agreement (sanity)
+    # Cross-variant agreement, as a sanity check on the rank transforms ----
     from scipy.stats import spearmanr
 
-    keys = [k for k in variants if res[k].notna().sum() > 100]
+    keys = [k for k in variants if res[k].notna().sum() > 100]  # too few cells gives a noisy rho
     for i in range(len(keys)):
         for j in range(i + 1, len(keys)):
             m = res[keys[i]].notna() & res[keys[j]].notna()
@@ -162,10 +178,12 @@ def main():
             summary[f"spearman[{keys[i]}~{keys[j]}]"] = round(rho, 4)
             log(f"spearman {keys[i]} ~ {keys[j]}: {rho:.4f}")
 
+    # Write ----
     res.index.name = "cell"
     res.to_csv(out / "pt_transferred_hs.csv")
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
 
+    # Per-timepoint histograms of the transferred values; a diagnostic, not a rule output.
     try:
         import matplotlib
         matplotlib.use("Agg")

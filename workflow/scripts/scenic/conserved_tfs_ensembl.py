@@ -1,28 +1,26 @@
-#!/usr/bin/env python
-"""Conserved decidual TFs across species -- Ensembl one2one join.
+"""Conserved decidual transcription factors across mouse and human, joined through
+Ensembl one2one orthologs.
 
-Script port of {scenic rev}/scripts/decidual_tf_list.ipynb (cells 2-17), with
-three deliberate changes and no other logic drift:
-  * cross-species join through Ensembl 116 Compara ortholog_one2one
-    (resources/orthology/ensembl_human_mouse_components.tsv) instead of the
-    notebook's `s.upper()` case-mapping -- project orthology policy 2026-09-15;
-  * reads the CURRENT SCENIC lane (config scenic.rev, v2 2026_08_28) instead of
-    the notebook's hardcoded dead-mount June lane;
-  * additionally reports the upper-case join side by side, so the effect of the
-    orthology switch on the conserved set is auditable.
+Not called by a Snakemake rule: run by hand with --rev, --orthology and --outdir.
+Reads, for each species, the consensus AUCell matrix and the pooled h5ad of the
+SCENIC lane (config scenic.rev) plus the Ensembl Compara ortholog table
+(resources/orthology/ensembl_human_mouse_components.tsv). Per species, every
+consensus regulon is tested decidual vs background (Mann-Whitney U, Cliff's delta,
+Benjamini-Hochberg FDR). Candidates pass --min-delta and --fdr and are not on the
+cell-cycle or non-TF blocklists. On the fib/dec lane the background is the
+fibroblasts.
 
-Per species: Mann-Whitney decidual-vs-background per consensus regulon ->
-Cliff's delta + BH FDR; candidates = delta >= MIN_DELTA & fdr < FDR minus the
-cell-cycle / non-TF blocklists (verbatim from the notebook). On the v2 fib/dec
-lane the background is the fibroblasts, i.e. the notebook pair's precursor
-contrast.
+The procedure follows decidual_tf_list.ipynb except that the
+cross-species join uses Ensembl one2one orthologs instead of upper-cased symbols,
+which is why the upper-case join is also reported for comparison.
 
-Outputs under --outdir:
-  diff_activity_{species}.csv       per-regulon delta/means/fdr
+Writes under --outdir:
+  diff_activity_{species}.csv       per-regulon delta, group means and FDR
   conserved_tfs_ensembl.csv         one2one-joined conserved decidual-up TFs
-  tiers_ensembl.tsv                 tier table (1 known / 2 novel / 3 one-species)
-  join_comparison.json              ensembl vs upper join: sizes, entered/exited,
-                                    candidates without a one2one partner
+  tiers_ensembl.tsv                 tier table (1 known, 2 novel, 3 one species only)
+  join_comparison.json              Ensembl vs upper-case join: sizes, TFs that
+                                    entered or exited, candidates without a one2one
+                                    partner
 """
 from __future__ import annotations
 
@@ -35,7 +33,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import mannwhitneyu
 
-# ----- notebook constants, verbatim ------------------------------------------
+# Constants ----
+# The label keys, blocklists and known decidual TFs are those of decidual_tf_list.ipynb.
 DECIDUAL_KEYS = ["decid", "dsc"]
 CELLCYCLE_TFS = ["E2f1", "E2f2", "E2f3", "E2f4", "E2f5", "E2f6", "E2f7", "E2f8",
                  "Foxm1", "Mybl1", "Mybl2", "Tfdp1", "Tfdp2", "Brca1"]
@@ -52,6 +51,7 @@ def base(name: str) -> str:
 
 
 def bh_fdr(p):
+    """Benjamini-Hochberg adjusted p-values (step-up, monotone from the largest p)."""
     p = np.asarray(p, float)
     n = len(p)
     order = np.argsort(p)
@@ -63,11 +63,14 @@ def bh_fdr(p):
 
 
 def load_one2one(tsv: Path, homology_type: str = "ortholog_one2one"):
-    """Strict symbol-level 1:1 map, same discipline as liana_crossspecies.py."""
+    """Strict symbol-level 1:1 map: one symbol per species per component, no symbol reused."""
     d = pd.read_csv(tsv, sep="\t")
     o = d[d["homology_type"] == homology_type].dropna(subset=["gene_symbol"])
     piv = o.pivot_table(index="component_id", columns="species",
                         values="gene_symbol", aggfunc=list)
+
+    # One symbol per species per component, and each symbol in exactly one pair:
+    # a symbol shared by two components would make the join ambiguous.
     pairs = []
     for _, row in piv.iterrows():
         hs, ms = row.get("human"), row.get("mouse")
@@ -80,6 +83,7 @@ def load_one2one(tsv: Path, homology_type: str = "ortholog_one2one"):
 
 
 def diff_activity(rev: str, species: str, tag: str, mode: str, ct_col: str) -> pd.DataFrame:
+    """Decidual-vs-background AUCell contrast for every consensus regulon of one species."""
     cdir = Path(rev) / "scenic_seeds" / species / f"consensus_{tag}_{mode}"
     auc = pd.read_csv(cdir / "auc_mtx.csv", index_col=0)
     a = ad.read_h5ad(Path(rev) / "scenic_seeds" / species / f"{species}_dsc_pooled.h5ad",
@@ -88,6 +92,8 @@ def diff_activity(rev: str, species: str, tag: str, mode: str, ct_col: str) -> p
     if labels.isna().any():
         raise SystemExit(f"[{species}] {int(labels.isna().sum())} AUCell cells "
                          f"missing from the pooled object -- index mismatch")
+
+    # Any label containing a decidual key is decidual; everything else is background.
     cats = sorted(labels.unique())
     dec_lbls = [c for c in cats if any(k in c.lower() for k in DECIDUAL_KEYS)]
     bg_lbls = [c for c in cats if c not in dec_lbls]
@@ -98,6 +104,8 @@ def diff_activity(rev: str, species: str, tag: str, mode: str, ct_col: str) -> p
     print(f"[{species}] DECIDUAL={dec_lbls} ({int(is_dec.sum()):,}) vs "
           f"BACKGROUND={bg_lbls} ({int(is_bg.sum()):,}); "
           f"{auc.shape[1]} regulons", flush=True)
+
+    # Cliff's delta is derived from the U statistic: 2U/(n1 n2) - 1.
     n_dec, n_bg = int(is_dec.sum()), int(is_bg.sum())
     rows = []
     A = auc.values
@@ -114,12 +122,15 @@ def diff_activity(rev: str, species: str, tag: str, mode: str, ct_col: str) -> p
 
 
 def candidates(df: pd.DataFrame, min_delta: float, fdr: float) -> pd.DataFrame:
+    """Decidual-up regulons passing the effect-size and FDR cutoffs, minus the blocklists."""
     keep = df[(df.delta >= min_delta) & (df.fdr < fdr)].copy()
     keep = keep[~keep.tf.str.casefold().isin(_BLOCK)]
     return keep.reset_index(drop=True)
 
 
 def main():
+    # The --sketch and --mode defaults equal config scenic.sketch / scenic.mode; the
+    # delta and FDR cutoffs are this script's own defaults.
     p = argparse.ArgumentParser()
     p.add_argument("--rev", required=True, help="SCENIC lane root (config scenic.rev)")
     p.add_argument("--orthology", required=True,
@@ -140,6 +151,7 @@ def main():
     m2h = load_one2one(Path(a.orthology))
     print(f"orthology: {len(m2h):,} symbol-unique one2one pairs", flush=True)
 
+    # Per-species differential activity ----
     res, cand = {}, {}
     for sp in ("mouse", "human"):
         res[sp] = diff_activity(a.rev, sp, tag, a.mode, a.celltype_col)
@@ -147,7 +159,7 @@ def main():
         cand[sp] = candidates(res[sp], a.min_delta, a.fdr)
         print(f"[{sp}] candidates after delta/FDR/blocklist: {len(cand[sp])}", flush=True)
 
-    # --- Ensembl one2one join (the fix) --------------------------------------
+    # Ensembl one2one join ----
     mouse_tfs = cand["mouse"].set_index("tf")
     human_tfs = cand["human"].set_index("tf")
     ens_rows, unmapped_mouse = [], []
@@ -167,7 +179,9 @@ def main():
     cons.to_csv(out / "conserved_tfs_ensembl.csv", index=False)
     print(f"conserved decidual-up TFs (Ensembl one2one): {len(cons)}", flush=True)
 
-    # --- legacy upper-case join, for the audit -------------------------------
+    # Upper-case symbol join, for comparison ----
+    # The notebook joined species by upper-casing symbols; the two sets are
+    # compared so the effect of the orthology switch is visible in the output.
     up_m = {t.upper(): t for t in mouse_tfs.index}
     up_h = {t.upper(): t for t in human_tfs.index}
     upper_set = set(up_m) & set(up_h)
@@ -191,7 +205,9 @@ def main():
     print(json.dumps({k: v for k, v in comparison.items()
                       if k.startswith("n_") or "not_" in k}, indent=1), flush=True)
 
-    # --- tier table (notebook cell 17, Ensembl-joined) ------------------------
+    # Tier table ----
+    # Tiers: 1 = conserved and in KNOWN_DECIDUAL, 2 = conserved and novel,
+    # 3 = candidate in one species only.
     known = {k.upper() for k in KNOWN_DECIDUAL}
     cons_upper = {r["tf_human"].upper() for r in ens_rows}
     tier_rows = []

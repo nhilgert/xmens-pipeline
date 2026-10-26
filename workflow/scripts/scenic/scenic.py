@@ -1,9 +1,9 @@
-"""STUB — intentionally disabled (2026-09-01 cleanup).
+"""Stub for rule `scenic` (workflow/rules/21_scenic.smk).
 
-This scaffold stage was never implemented; the real analyses live in the
-numbered arms (10_samap ... 15_pt_per_timepoint). This stub previously
-`touch`ed its declared outputs, which could fabricate empty result files
-(e.g. results/tables/mi_*.csv). It now fails loudly instead.
+Reads nothing and writes nothing. This scaffold stage was never implemented and the
+real SCENIC analyses live in 13_scenic.smk. The stub exits with an error that names
+the rule's declared outputs instead of touching empty files, which downstream rules
+could otherwise mistake for results.
 """
 import sys
 

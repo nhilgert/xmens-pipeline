@@ -1,13 +1,13 @@
-"""STUB — intentionally disabled (2026-09-01 cleanup).
+"""Placeholder for the unimplemented `de` rule (05_de.smk).
 
-This scaffold stage was never implemented; the real analyses live in the
-numbered arms (10_samap ... 15_pt_per_timepoint). This stub previously
-`touch`ed its declared outputs, which could fabricate empty result files
-(e.g. results/tables/mi_*.csv). It now fails loudly instead.
+Reads nothing and writes nothing: it exits with an error that names the rule and its
+declared outputs, so Snakemake never records empty result files for this stage. The
+implemented DE lives in rules de_lineage_clusters and de_lineage_subtypes of the same file.
 """
 import sys
 
 snk = snakemake  # noqa: F821  (injected by Snakemake)
+
 sys.exit(
     f"STUB RULE '{snk.rule}' is not implemented; refusing to fabricate "
     f"outputs: {[str(f) for f in snk.output]}"

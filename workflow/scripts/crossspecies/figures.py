@@ -1,9 +1,10 @@
-"""STUB — intentionally disabled (2026-09-01 cleanup).
+"""Stub for rule figures in workflow/rules/90_figures.smk.
 
-This scaffold stage was never implemented; the real analyses live in the
-numbered arms (10_samap ... 15_pt_per_timepoint). This stub previously
-`touch`ed its declared outputs, which could fabricate empty result files
-(e.g. results/tables/mi_*.csv). It now fails loudly instead.
+Reads nothing and writes nothing: it exits with an error. This scaffold stage
+was never implemented. Figure rules live in the stage files that produce them
+(e.g. zone_figures in 16_zone_modules.smk, clustree_plot in 98_clustree.smk).
+Touching the declared outputs would
+fabricate empty result files, so the rule fails loudly instead.
 """
 import sys
 
